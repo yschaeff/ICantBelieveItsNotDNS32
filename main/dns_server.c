@@ -122,6 +122,8 @@ void process_msg(void *pvParameter)
             continue;
         }
         printf("recvd some shit (%d bytes)\n", peerinfo.buflen);
+        sendto(peerinfo.sock, peerinfo.buf, peerinfo.buflen, 0, (const struct sockaddr *)&peerinfo.addr,
+            peerinfo.addr_size);
         free(peerinfo.buf);
     }
 }
@@ -162,6 +164,7 @@ void serve()
         memset(&peerinfo, 0, sizeof (struct c_info));
         peerinfo.sock = sock;
         peerinfo.buf = malloc(n);
+        peerinfo.buflen = n;
         memcpy(peerinfo.buf, buf, n);
         peerinfo.addr = peer_addr;
         peerinfo.addr_size = addr_size;

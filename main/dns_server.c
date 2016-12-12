@@ -112,6 +112,7 @@ void process_msg(void *pvParameter)
 {
     QueueHandle_t *peerqueue = (QueueHandle_t *)pvParameter;
     struct c_info peerinfo;
+    ssize_t b_sent;
 
     /*char *host = ipaddr_ntoa(((struct sockaddr_in6)peerinfo->addr).sin_addr);*/
     /*char *port = lwip_ntohs(peerinfo->addr.sin_port);*/
@@ -121,9 +122,12 @@ void process_msg(void *pvParameter)
         if (!xQueueReceive(*peerqueue, &peerinfo, MS(10000))) {
             continue;
         }
-        printf("recvd some shit (%d bytes)\n", peerinfo.buflen);
-        sendto(peerinfo.sock, peerinfo.buf, peerinfo.buflen, 0, (const struct sockaddr *)&peerinfo.addr,
-            peerinfo.addr_size);
+        /*printf("recvd some shit (%d bytes)\n", peerinfo.buflen);*/
+        b_sent = sendto(peerinfo.sock, peerinfo.buf, peerinfo.buflen, 0,
+               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
+        if (b_sent == -1) {
+            perror("sendto");
+        }
         free(peerinfo.buf);
     }
 }
@@ -133,22 +137,28 @@ void serve()
     int sock;
     size_t n;
     char buf[BUF_SIZE];
-    struct sockaddr_in6 serverAddr;
+    struct sockaddr_in serverAddr;
+    /*struct sockaddr_in6 serverAddr;*/
     struct sockaddr_storage peer_addr;
     socklen_t addr_size;
     struct c_info peerinfo;
     QueueHandle_t peerqueue;
 
     peerqueue =  xQueueCreate( 10, sizeof (peerinfo));
-    xTaskCreate(process_msg, "msg", 2048, &peerqueue, 5, NULL);
+    xTaskCreate(process_msg, "msg1", 2048, &peerqueue, 5, NULL);
     // maybe also send socket here
 
-    sock = socket(PF_INET6, SOCK_DGRAM, 0);
+    sock = socket(PF_INET, SOCK_DGRAM, 0);
+    /*sock = socket(PF_INET6, SOCK_DGRAM, 0);*/
 
     memset(&serverAddr, 0, sizeof serverAddr);
-    serverAddr.sin6_family = AF_INET6;
-    serverAddr.sin6_port = htons(53);
-    serverAddr.sin6_addr= in6addr_any;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(53);
+    /*serverAddr.sin_addr.s_addr = inet_addr("10.0.0.16");*/
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    /*serverAddr.sin6_family = AF_INET6;*/
+    /*serverAddr.sin6_port = htons(53);*/
+    /*serverAddr.sin6_addr= in6addr_any;*/
 
     bind(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
     addr_size = sizeof peer_addr;
@@ -160,12 +170,12 @@ void serve()
             perror("recvfrom");
             continue;
         }
-        printf("rcvd %d bytes\n", n);
+        /*printf("rcvd %d bytes\n", n);*/
         memset(&peerinfo, 0, sizeof (struct c_info));
         peerinfo.sock = sock;
         peerinfo.buf = malloc(n);
-        peerinfo.buflen = n;
         memcpy(peerinfo.buf, buf, n);
+        peerinfo.buflen = n;
         peerinfo.addr = peer_addr;
         peerinfo.addr_size = addr_size;
         if (!xQueueSend(peerqueue, &peerinfo, 100)) {

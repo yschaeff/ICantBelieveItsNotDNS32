@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -23,6 +22,7 @@
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 
+#include "query.h"
 #include "passwords.h"
 #define EXAMPLE_WIFI_SSID "honeypot"
 #define EXAMPLE_WIFI_PASS HONEYPOT_PASSWORD
@@ -33,10 +33,7 @@ const int DHCP_BIT = BIT0;
 
 #define BLINK_GPIO CONFIG_BLINK_GPIO
 
-int MS(int ms)
-{
-    return ms / portTICK_RATE_MS;
-}
+#define MS(ms) ((ms) / portTICK_RATE_MS)
 
 void blink_task(void *pvParameter)
 {
@@ -44,9 +41,9 @@ void blink_task(void *pvParameter)
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
     while(1) {
         gpio_set_level(BLINK_GPIO, 1);
-        vTaskDelay(100 / portTICK_RATE_MS);
+        vTaskDelay(MS(100));
         gpio_set_level(BLINK_GPIO, 0);
-        vTaskDelay(100 / portTICK_RATE_MS);
+        vTaskDelay(MS(100));
     }
 }
 
@@ -99,6 +96,7 @@ void wifiinit(EventGroupHandle_t evg)
     esp_wifi_start();
 }
 
+
 /*Context that passes client and client message to task*/
 struct c_info {
     int sock;
@@ -113,6 +111,8 @@ void process_msg(void *pvParameter)
     QueueHandle_t *peerqueue = (QueueHandle_t *)pvParameter;
     struct c_info peerinfo;
     ssize_t b_sent;
+    char reply[BUF_SIZE];
+    ssize_t reply_size;
 
     /*char *host = ipaddr_ntoa(((struct sockaddr_in6)peerinfo->addr).sin_addr);*/
     /*char *port = lwip_ntohs(peerinfo->addr.sin_port);*/
@@ -122,11 +122,13 @@ void process_msg(void *pvParameter)
         if (!xQueueReceive(*peerqueue, &peerinfo, MS(10000))) {
             continue;
         }
-        /*printf("recvd some shit (%d bytes)\n", peerinfo.buflen);*/
-        b_sent = sendto(peerinfo.sock, peerinfo.buf, peerinfo.buflen, 0,
-               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
-        if (b_sent == -1) {
-            perror("sendto");
+        reply_size = dns_reply(peerinfo.buf, peerinfo.buflen, reply, sizeof reply);
+        if (reply_size) {
+            b_sent = sendto(peerinfo.sock, reply, reply_size, 0,
+                   (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
+            if (b_sent == -1) {
+                perror("sendto");
+            }
         }
         free(peerinfo.buf);
     }
@@ -145,7 +147,7 @@ void serve()
     QueueHandle_t peerqueue;
 
     peerqueue =  xQueueCreate( 10, sizeof (peerinfo));
-    xTaskCreate(process_msg, "msg1", 2048, &peerqueue, 5, NULL);
+    xTaskCreate(process_msg, "msg1", 4096, &peerqueue, 5, NULL);
     // maybe also send socket here
 
     sock = socket(PF_INET, SOCK_DGRAM, 0);

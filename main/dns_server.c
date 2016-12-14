@@ -26,6 +26,8 @@
 #include "passwords.h"
 #define EXAMPLE_WIFI_SSID "honeypot"
 #define EXAMPLE_WIFI_PASS HONEYPOT_PASSWORD
+/*#define EXAMPLE_WIFI_SSID "NLnetLabs"*/
+/*#define EXAMPLE_WIFI_PASS NLNETLABS_PASSWORD*/
 
 #define BUF_SIZE 2048
 
@@ -123,14 +125,17 @@ void process_msg(void *pvParameter)
             continue;
         }
         reply_size = dns_reply(peerinfo.buf, peerinfo.buflen, reply, sizeof reply);
+        /*reply_size = peerinfo.buflen;*/
         if (reply_size) {
             b_sent = sendto(peerinfo.sock, reply, reply_size, 0,
-                   (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
+            /*b_sent = sendto(peerinfo.sock, peerinfo.buf, reply_size, 0,*/
+               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
             if (b_sent == -1) {
                 perror("sendto");
             }
         }
         free(peerinfo.buf);
+        vTaskDelay(0);//alloc for GC
     }
 }
 
@@ -147,7 +152,8 @@ void serve()
     QueueHandle_t peerqueue;
 
     peerqueue =  xQueueCreate( 10, sizeof (peerinfo));
-    xTaskCreate(process_msg, "msg1", 4096, &peerqueue, 5, NULL);
+    xTaskCreate(process_msg, "msg1", 8192, &peerqueue, 5, NULL);
+    xTaskCreate(process_msg, "msg2", 8192, &peerqueue, 5, NULL);
     // maybe also send socket here
 
     sock = socket(PF_INET, SOCK_DGRAM, 0);
@@ -190,11 +196,11 @@ void app_main()
 {
     EventGroupHandle_t *evg;
     nvs_flash_init();
-    xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
 
     evg = xEventGroupCreate();
     wifiinit(evg);
     printf("Waiting for IP address...\n");
     while (!(xEventGroupWaitBits(evg, DHCP_BIT , pdFALSE, pdTRUE, MS(100)) & DHCP_BIT));
+    xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
     serve();
 }

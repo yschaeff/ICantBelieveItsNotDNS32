@@ -1,7 +1,8 @@
 #ifndef QUERY_H
 #define QUERY_H
 
-ssize_t
-dns_reply(char *, size_t, char *, size_t);
+//@return number of bytes in reply. 0 on parse error
+size_t
+dns_reply(char *inb, size_t inn, char *outb, size_t outn);
 
 #endif /*QUERY_H*/

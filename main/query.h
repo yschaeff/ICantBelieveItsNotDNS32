@@ -5,4 +5,6 @@
 size_t
 dns_reply(char *inb, size_t inn, char *outb, size_t outn);
 
+int
+bootstrap(char *master, char *zone);
 #endif /*QUERY_H*/

@@ -201,6 +201,7 @@ void app_main()
     wifiinit(evg);
     printf("Waiting for IP address...\n");
     while (!(xEventGroupWaitBits(evg, DHCP_BIT , pdFALSE, pdTRUE, MS(100)) & DHCP_BIT));
+    bootstrap(NULL, NULL);
     xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
     serve();
 }

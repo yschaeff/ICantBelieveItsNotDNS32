@@ -23,21 +23,16 @@
 #include "lwip/sockets.h"
 
 #include "query.h"
-#include "passwords.h"
-#define EXAMPLE_WIFI_SSID "honeypot"
-#define EXAMPLE_WIFI_PASS HONEYPOT_PASSWORD
-/*#define EXAMPLE_WIFI_SSID "NLnetLabs"*/
-/*#define EXAMPLE_WIFI_PASS NLNETLABS_PASSWORD*/
+#include "wifi.h"
 
 #define BUF_SIZE 2048
-
-const int DHCP_BIT = BIT0;
 
 #define BLINK_GPIO CONFIG_BLINK_GPIO
 
 #define MS(ms) ((ms) / portTICK_RATE_MS)
 
-void blink_task(void *pvParameter)
+static void
+blink_task(void *pvParameter)
 {
     gpio_pad_select_gpio(BLINK_GPIO);
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
@@ -49,56 +44,6 @@ void blink_task(void *pvParameter)
     }
 }
 
-static esp_err_t event_handler(void *ctx, system_event_t *event)
-{
-    EventGroupHandle_t evg = (EventGroupHandle_t)ctx;
-    printf("rcvd wifi event %d\n", event->event_id);
-    switch(event->event_id) {
-        case SYSTEM_EVENT_STA_START:
-            printf("rcvd wifi event start\n");
-            esp_wifi_connect();
-            break;
-        case SYSTEM_EVENT_STA_GOT_IP:
-            printf("rcvd wifi event dhcp\n");
-            xEventGroupSetBits(evg, DHCP_BIT);
-            break;
-        case SYSTEM_EVENT_STA_DISCONNECTED:
-            printf("rcvd wifi event disconnect\n");
-            esp_wifi_connect();
-            xEventGroupClearBits(evg, DHCP_BIT);
-            break;
-        case SYSTEM_EVENT_STA_CONNECTED:
-            printf("rcvd wifi event connected\n");
-            break;
-        default:
-            printf("rcvd wifi event UNKNOWN\n");
-            break;
-    }
-    return ESP_OK;
-}
-
-void wifiinit(EventGroupHandle_t evg)
-{
-    tcpip_adapter_init();
-
-    ESP_ERROR_CHECK( esp_event_loop_init(event_handler, evg) );
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    esp_wifi_init(&cfg);
-    esp_wifi_set_storage(WIFI_STORAGE_RAM);
-
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = EXAMPLE_WIFI_SSID,
-            .password = EXAMPLE_WIFI_PASS,
-        },
-    };
-    ESP_LOGI("XXX", "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
-    esp_wifi_set_mode(WIFI_MODE_STA);
-    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-    esp_wifi_start();
-}
-
-
 /*Context that passes client and client message to task*/
 struct c_info {
     int sock;
@@ -108,7 +53,8 @@ struct c_info {
     socklen_t addr_size;
 };
 
-void process_msg(void *pvParameter)
+static void
+process_msg(void *pvParameter)
 {
     QueueHandle_t *peerqueue = (QueueHandle_t *)pvParameter;
     struct c_info peerinfo;
@@ -139,7 +85,7 @@ void process_msg(void *pvParameter)
     }
 }
 
-void serve()
+static void serve()
 {
     int sock;
     size_t n;
@@ -194,13 +140,14 @@ void serve()
 
 void app_main()
 {
-    EventGroupHandle_t *evg;
+    esp_err_t error;
     nvs_flash_init();
 
-    evg = xEventGroupCreate();
-    wifiinit(evg);
-    printf("Waiting for IP address...\n");
-    while (!(xEventGroupWaitBits(evg, DHCP_BIT , pdFALSE, pdTRUE, MS(100)) & DHCP_BIT));
+    error = wifi_network_up();
+    if (error) {
+        ESP_LOGE("MAIN", "Unable to bring up network");
+        //Reboot
+    }
     bootstrap(NULL, NULL);
     xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
     serve();

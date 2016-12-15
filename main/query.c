@@ -36,7 +36,8 @@ struct dns_header {
 
 //find end of owner name. 1 on error, 0 otherwise
 //On error **end is undefined
-int find_owner_uncompressed(char *start, char **end, char *bufend)
+static int
+find_owner_uncompressed(char *start, char **end, char *bufend)
 {
     *end = start;
     while (**end != 0) {
@@ -53,8 +54,8 @@ size_t dns_reply(char *inb, size_t inn, char *outb, size_t outn)
     if (inn < 12) return 0;
 
     hdr = (struct dns_header *) inb; //BAM! no more memcpy!
-    printf("%d, %d, %d, %d, %d\n", ntohs(hdr->id), ntohs(hdr->qr_count), ntohs(hdr->an_count),
-        ntohs(hdr->au_count), ntohs(hdr->ad_count));
+    /*printf("%d, %d, %d, %d, %d\n", ntohs(hdr->id), ntohs(hdr->qr_count), ntohs(hdr->an_count),*/
+        /*ntohs(hdr->au_count), ntohs(hdr->ad_count));*/
 
     if (hdr->answer_flag) return 0;
     if (ntohs(hdr->opcode) != 0) return 0;
@@ -69,7 +70,7 @@ size_t dns_reply(char *inb, size_t inn, char *outb, size_t outn)
     qtype  = (uint16_t *)(owner_end + 1);
     qclass = (uint16_t *)(owner_end + 3);
 
-    printf("type: %d, class: %d\n", ntohs(*qtype), ntohs(*qclass));
+    /*printf("type: %d, class: %d\n", ntohs(*qtype), ntohs(*qclass));*/
 
     memmove(outb, inb, inn);
     return inn;

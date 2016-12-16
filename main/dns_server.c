@@ -23,6 +23,7 @@
 #include "lwip/sockets.h"
 
 #include "query.h"
+#include "axfr.h"
 #include "wifi.h"
 
 #define BUF_SIZE 2048
@@ -70,7 +71,7 @@ process_msg(void *pvParameter)
         if (!xQueueReceive(*peerqueue, &peerinfo, MS(10000))) {
             continue;
         }
-        reply_size = dns_reply(peerinfo.buf, peerinfo.buflen, reply, sizeof reply);
+        reply_size = query_dns_reply(peerinfo.buf, peerinfo.buflen, reply, sizeof reply);
         /*reply_size = peerinfo.buflen;*/
         if (reply_size) {
             b_sent = sendto(peerinfo.sock, reply, reply_size, 0,
@@ -148,7 +149,7 @@ void app_main()
         ESP_LOGE("MAIN", "Unable to bring up network");
         //Reboot
     }
-    bootstrap(NULL, NULL);
+    axfr(NULL, NULL);
     xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
     serve();
 }

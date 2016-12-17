@@ -4,7 +4,9 @@
 #include <unistd.h>
 #include <string.h>//memset
 #include <stdlib.h>
+#include <inttypes.h>
 
+#include "esp_log.h"
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
@@ -45,6 +47,39 @@ open_tcpsock(char *host)
     return s;
 }
 
+static int
+process_axfr_msg(char *buf, int buflen)
+{
+    char *c = buf + 12;
+    char *bufend = buf+buflen-1;
+
+    if (query_find_owner_uncompressed(c, &c, bufend)) return 1;
+    if ((c += 4) > bufend) return 1;
+    /*We are now at the start of the answer section*/
+    uint16_t an_count = query_pkt_an_count(buf);
+    for (; an_count; an_count--) {
+    /*while (c < bufend) {*/
+        if (c >= bufend) {
+            ESP_LOGW(__func__, "out of packet with %" PRIu16, an_count);
+            break;
+        }
+        char *owner, *owner_end, *rdata, *next;
+        uint16_t *qtype, *qclass, *rdatalen;
+        uint32_t *ttl;
+        
+        if (query_read_rr(c, bufend, &owner_end, &qtype, &qclass, &ttl, &rdatalen, &rdata)) {
+            printf("FAIL\n");
+            return 1;
+        }
+        owner = c;
+        //do stuff here
+        ESP_LOGI("RR", "len: %" PRIu16, ntohs(*rdatalen));
+        c = rdata + ntohs(*rdatalen);
+    }
+    ESP_LOGI(__func__, "bytes left: %d pkts: %" PRIu16 "/%" PRIu16, bufend-c+1, an_count, query_pkt_an_count(buf));
+    return 0;
+}
+
 int axfr(char *master, char *zone)
 {
     int sock;
@@ -53,14 +88,14 @@ int axfr(char *master, char *zone)
     char *msg;
     char *query = "\x09schaeffer\x02tk\x00\x00\xFC\x00\x01";
     char *qhdr = "\xAA\xAA\x00\x20\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00";
-    /*char *ns = "10.0.0.10";*/
-    char *ns = "ns1.schaeffer.tk";
+    char *ns = "10.0.0.10";
+    /*char *ns = "ns1.schaeffer.tk";*/
 
     if ((sock = open_tcpsock(ns)) < 0) return 1;
     /*SEND AXFR REQUEST*/
     if (!(msg = query_axfr_msg(qhdr, query, 1, &msgout_len))) {
         close(sock);
-        printf("construct q failed\n");
+        ESP_LOGE("AXFR", "construct q failed\n");
         return 1;
     }
     write(sock, msg, msgout_len);
@@ -69,10 +104,10 @@ int axfr(char *master, char *zone)
     /*RECV AXFR*/
     ssize_t l = read(sock, &msgin_len, 2);
     if (l != 2) {
-        printf("fail %d\n", l);
+        ESP_LOGE("AXFR", "fail %d\n", l);
         perror("read");
     }
-    printf("need to allocate %d bytes\n", ntohs(msgin_len));
+    ESP_LOGI("AXFR", "need to allocate %d bytes\n", ntohs(msgin_len));
     size_t bLeft = ntohs(msgin_len);
     char *axfr = malloc(bLeft);
     char *p = axfr;
@@ -84,7 +119,10 @@ int axfr(char *master, char *zone)
         printf("read %d bytes, %d to go\n", l, bLeft);
     }
 
-
     close(sock);
+    if (process_axfr_msg(axfr, ntohs(msgin_len))) {
+        ESP_LOGE("AXFR", "failed to process AXFR");
+    }
+    free(axfr);
     return 0;
 }

@@ -14,6 +14,8 @@
 
 #include "query.h"
 
+#define MAX_LABEL_COUNT 63
+
 struct dns_header {
     uint16_t id;
     /*The following 2 bytes have reversed endianess*/
@@ -53,6 +55,67 @@ query_find_owner_uncompressed(char *start, char **end, char *bufend)
     return 0;
 }
 
+/*Return buffer with uncompressed owner name. Result must be freed by caller.*/
+/*NULL on error. otherwise \0 terminated string guaranteed. */
+char *
+query_find_owner_compressed(char *pkt, size_t pktlen, char *start)
+{
+    char *ptr[MAX_LABEL_COUNT];
+
+    for (size_t i = 0; i < MAX_LABEL_COUNT; i++) {
+        if (*start == 0) {
+            size_t s = 1;
+            for (int j = 0; j < i; j++) s += *ptr[j]+1; /* sum */
+            char *r, *rp;
+            rp = r = malloc(s * sizeof (char));
+            if (!r) {
+                ESP_LOGE(__func__, "Unable to allocate buffer.");
+                return NULL;
+            }
+            for (int j = 0; j < i; j++) {
+                memcpy(rp, ptr[j], *ptr[j]+1);
+                rp += *ptr[j]+1;
+            }
+            *rp = 0;
+            return r;
+        }
+        while (((*start) & 0xC0) == 0xC0) {
+            if (start + 1 >= pkt + pktlen) {
+                ESP_LOGE(__func__, "Address read out of bounds");
+                return NULL;
+            }
+            uint16_t jmp = ntohs(*((uint16_t*)start)) ^ 0xC000;
+            if (jmp >= pktlen) {
+                ESP_LOGE(__func__, "Address target out of bounds %d %d", pktlen, jmp);
+                return NULL;
+            }
+            start = pkt + jmp;
+            //todo build loop protection.
+        }
+        ptr[i] = start;
+        start += *start + 1;
+        if (start >= pkt + pktlen) {
+            ESP_LOGE(__func__, "Label read out of buffer.");
+            return NULL;
+        }
+    }
+    ESP_LOGE(__func__, "to many jumps in name");
+    return NULL;
+}
+
+void
+query_printname(char *name)
+{
+    while (*name != 0) {
+        char n = *name;
+        for (char *p = name+1; p < name + n+1; p++) {
+            putchar(*p);
+        }
+        putchar('.');
+        name += n + 1;
+    }
+}
+
 uint16_t query_pkt_qr_count(char *buf) {
     struct dns_header *hdr = (struct dns_header *) buf;
     return ntohs(hdr->qr_count);
@@ -75,7 +138,7 @@ printx(char *buf, size_t len)
 {
     for (size_t i = 0; i < len; i++) {
         printf("%02x ", buf[i]);
-        if (!((i+1)%8)) printf("\n");
+        if (!((i+1)%32)) printf("\n");
         else if (!((i+1)%4)) printf("   ");
     }
     printf("\n");

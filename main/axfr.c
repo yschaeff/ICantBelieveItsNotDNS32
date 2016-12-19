@@ -58,7 +58,6 @@ process_axfr_msg(char *buf, int buflen)
     /*We are now at the start of the answer section*/
     uint16_t an_count = query_pkt_an_count(buf);
     for (; an_count; an_count--) {
-    /*while (c < bufend) {*/
         if (c >= bufend) {
             ESP_LOGW(__func__, "out of packet with %" PRIu16, an_count);
             break;
@@ -66,14 +65,22 @@ process_axfr_msg(char *buf, int buflen)
         char *owner, *owner_end, *rdata, *next;
         uint16_t *qtype, *qclass, *rdatalen;
         uint32_t *ttl;
-        
+
         if (query_read_rr(c, bufend, &owner_end, &qtype, &qclass, &ttl, &rdatalen, &rdata)) {
             printf("FAIL\n");
             return 1;
         }
         owner = c;
+
         //do stuff here
-        ESP_LOGI("RR", "len: %" PRIu16, ntohs(*rdatalen));
+        char *name = query_find_owner_compressed(buf, buflen, owner);
+        if (name) {
+            query_printname(name);
+            printf("\n");
+        }
+        free(name);
+
+        ESP_LOGI(__func__, "len: %" PRIu16, ntohs(*rdatalen));
         c = rdata + ntohs(*rdatalen);
     }
     ESP_LOGI(__func__, "bytes left: %d pkts: %" PRIu16 "/%" PRIu16, bufend-c+1, an_count, query_pkt_an_count(buf));

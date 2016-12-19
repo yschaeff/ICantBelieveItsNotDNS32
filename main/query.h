@@ -18,4 +18,14 @@ uint16_t query_pkt_qr_count(char *buf);
 uint16_t query_pkt_an_count(char *buf);
 uint16_t query_pkt_au_count(char *buf);
 uint16_t query_pkt_ad_count(char *buf);
+
+char *
+query_find_owner_compressed(char *pkt, size_t pktlen, char *start);
+
+void
+query_printname(char *name);
+
+void
+printx(char *buf, size_t len);
+
 #endif /*QUERY_H*/

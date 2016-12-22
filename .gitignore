@@ -1,0 +1,6 @@
+build/
+libs
+main/Kconfig.projbuild
+main/passwords.h
+sdkconfig.old
+tags

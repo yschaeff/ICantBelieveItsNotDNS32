@@ -13,8 +13,10 @@
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
 
+#include "namedb.h"
 #include "query.h"
 
+#define DNS_SERVER_PORT CONFIG_DNS_SERVER_PORT
 
 static int
 open_tcpsock(char *host)
@@ -26,6 +28,7 @@ open_tcpsock(char *host)
     };
     int s;
 
+    /*int error = getaddrinfo(host, "DNS_SERVER_PORT", &hint, &res);*/
     int error = getaddrinfo(host, "53", &hint, &res);
     if (error) {
         printf("getaddrinfo failed\n");
@@ -52,6 +55,9 @@ process_axfr_msg(char *buf, int buflen)
 {
     char *c = buf + 12;
     char *bufend = buf+buflen-1;
+    struct namedb *namedb = namedb_init();
+
+    if (!namedb) return 1;
 
     if (query_find_owner_uncompressed(c, &c, bufend)) return 1;
     if ((c += 4) > bufend) return 1;
@@ -77,8 +83,8 @@ process_axfr_msg(char *buf, int buflen)
         if (name) {
             query_printname(name);
             printf("\n");
+            namedb_insert(namedb, name, owner_end);
         }
-        free(name);
 
         ESP_LOGI(__func__, "len: %" PRIu16, ntohs(*rdatalen));
         c = rdata + ntohs(*rdatalen);

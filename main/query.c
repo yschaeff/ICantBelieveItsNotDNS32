@@ -38,6 +38,7 @@ struct dns_header {
 };
 
 //find end of owner name. 1 on error, 0 otherwise
+//end will be the first byte not part of the name
 //On error **end is undefined
 int
 query_find_owner_uncompressed(char *start, char **end, char *bufend)
@@ -45,13 +46,13 @@ query_find_owner_uncompressed(char *start, char **end, char *bufend)
     *end = start;
     while (**end != 0) {
         if (((**end) & 0xC0) == 0xC0) {
-            *end += 1;
+            (*end)++;
             break;
         }
         if (*end + **end + 1 > bufend) return 1;
         *end += **end + 1;
     }
-    *end += 1;
+    (*end)++;
     return 0;
 }
 

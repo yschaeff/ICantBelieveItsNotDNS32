@@ -29,6 +29,7 @@
 #define BUF_SIZE 2048
 
 #define BLINK_GPIO CONFIG_BLINK_GPIO
+#define DNS_SERVER_PORT CONFIG_DNS_SERVER_PORT
 
 #define MS(ms) ((ms) / portTICK_RATE_MS)
 
@@ -108,7 +109,7 @@ static void serve()
 
     memset(&serverAddr, 0, sizeof serverAddr);
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(53);
+    serverAddr.sin_port = htons(DNS_SERVER_PORT);
     /*serverAddr.sin_addr.s_addr = inet_addr("10.0.0.16");*/
     serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
     /*serverAddr.sin6_family = AF_INET6;*/
@@ -134,7 +135,7 @@ static void serve()
         peerinfo.addr = peer_addr;
         peerinfo.addr_size = addr_size;
         if (!xQueueSend(peerqueue, &peerinfo, 100)) {
-                puts("Queue full, dropping packet\n");
+            ESP_LOGW(__func__, "Queue full, dropping packet");
         }
     }
 }

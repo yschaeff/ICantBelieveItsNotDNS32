@@ -56,10 +56,17 @@ struct c_info {
     socklen_t addr_size;
 };
 
+struct thread_context {
+    QueueHandle_t *peerqueue;
+    struct namedb *namedb;
+};
+
 static void
 process_msg(void *pvParameter)
 {
-    QueueHandle_t *peerqueue = (QueueHandle_t *)pvParameter;
+
+    QueueHandle_t *peerqueue = ((struct thread_context *)pvParameter)->peerqueue;
+    struct namedb *namedb = ((struct thread_context *)pvParameter)->namedb;
     struct c_info peerinfo;
     ssize_t b_sent;
     char reply[BUF_SIZE];
@@ -99,8 +106,10 @@ static void serve(struct namedb *namedb)
     socklen_t addr_size;
     struct c_info peerinfo;
     QueueHandle_t peerqueue;
+    struct thread_context thread_context;
 
-    peerqueue =  xQueueCreate( 10, sizeof (peerinfo));
+    thread_context.peerqueue =  xQueueCreate( 10, sizeof (peerinfo)); //TODO check if this can fail.
+    thread_context.namedb = namedb;
     xTaskCreate(process_msg, "msg1", 8192, &peerqueue, 5, NULL);
     xTaskCreate(process_msg, "msg2", 8192, &peerqueue, 5, NULL);
     // maybe also send socket here
@@ -154,7 +163,7 @@ void app_main()
     struct namedb *namedb = namedb_init();
     if (!namedb) {
         ESP_LOGE(__func__, "namedb init error");
-        return 1;
+        return; //TODO some soft of panic
     }
     axfr(NULL, NULL, namedb);
     xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);

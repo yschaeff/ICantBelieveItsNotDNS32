@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include "esp_log.h"
+
 #include "tree.h"
 
 struct node {
@@ -44,7 +45,6 @@ tree_insert(struct tree *tree, void *value)
     *parent = node;
     return 0;
 }
-
 
 void *
 tree_lookup(struct tree *tree, void *value)

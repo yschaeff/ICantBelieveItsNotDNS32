@@ -126,7 +126,7 @@ int axfr(char *master, char *zone, struct namedb *namedb)
         /*TODO: handle error*/
         bLeft -= l;
         p += l;
-        printf("read %d bytes, %d to go\n", l, bLeft);
+        ESP_LOGI(__func__, "read %d bytes, %d to go\n", l, bLeft);
     }
 
     close(sock);

@@ -22,6 +22,7 @@
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 
+#include "namedb.h"
 #include "query.h"
 #include "axfr.h"
 #include "wifi.h"
@@ -87,7 +88,7 @@ process_msg(void *pvParameter)
     }
 }
 
-static void serve()
+static void serve(struct namedb *namedb)
 {
     int sock;
     size_t n;
@@ -150,7 +151,12 @@ void app_main()
         ESP_LOGE("MAIN", "Unable to bring up network");
         //Reboot
     }
-    axfr(NULL, NULL);
+    struct namedb *namedb = namedb_init();
+    if (!namedb) {
+        ESP_LOGE(__func__, "namedb init error");
+        return 1;
+    }
+    axfr(NULL, NULL, namedb);
     xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
-    serve();
+    serve(namedb);
 }

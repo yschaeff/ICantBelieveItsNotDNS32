@@ -51,13 +51,10 @@ open_tcpsock(char *host)
 }
 
 static int
-process_axfr_msg(char *buf, int buflen)
+process_axfr_msg(char *buf, int buflen, struct namedb *namedb)
 {
     char *c = buf + 12;
     char *bufend = buf+buflen-1;
-    struct namedb *namedb = namedb_init();
-
-    if (!namedb) return 1;
 
     if (query_find_owner_uncompressed(c, &c, bufend)) return 1;
     if ((c += 4) > bufend) return 1;
@@ -93,7 +90,7 @@ process_axfr_msg(char *buf, int buflen)
     return 0;
 }
 
-int axfr(char *master, char *zone)
+int axfr(char *master, char *zone, struct namedb *namedb)
 {
     int sock;
     size_t msgout_len;
@@ -133,7 +130,7 @@ int axfr(char *master, char *zone)
     }
 
     close(sock);
-    if (process_axfr_msg(axfr, ntohs(msgin_len))) {
+    if (process_axfr_msg(axfr, ntohs(msgin_len), namedb)) {
         ESP_LOGE("AXFR", "failed to process AXFR");
     }
     free(axfr);

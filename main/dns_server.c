@@ -80,6 +80,39 @@ process_msg(void *pvParameter)
         if (!xQueueReceive(*peerqueue, &peerinfo, MS(10000))) {
             continue;
         }
+        if (peerinfo.buflen < sizeof(struct dns_header)) {
+            ESP_LOGE(__func__, "packet doesn't fit header");
+            //TODO respond FORMERR
+            free(peerinfo.buf);
+            continue;
+        }
+        if (query_pkt_qr_count(peerinfo.buf) < 1) {
+            ESP_LOGE(__func__, "no question?");
+            //TODO respond FORMERR
+            free(peerinfo.buf);
+            continue;
+        }
+        char *owner = peerinfo.buf + sizeof(struct dns_header);
+        char *qtype_class;
+        if (query_find_owner_uncompressed(owner, &qtype_class, peerinfo.buf + peerinfo.buflen))
+        {
+            ESP_LOGE(__func__, "Could not parse owner name");
+            //TODO respond FORMERR
+            free(peerinfo.buf);
+            continue;
+        }
+
+        //TODO pass result from lookup, payload+num
+        struct rrset *rrset = namedb_lookup(namedb, owner, qtype_class);
+        if (!rrset) {
+            ESP_LOGE(__func__, "not is DB");
+            /*TODO: a CNAME MIGHT BE THOUGH*/
+            //TODO respond NXDOMAIN
+            free(peerinfo.buf);
+            continue;
+        }
+        ESP_LOGI(__func__, "Yes! found in DB! rrsetsize: %d", rrset->num);
+
         reply_size = query_dns_reply(peerinfo.buf, peerinfo.buflen, reply, sizeof reply);
         /*reply_size = peerinfo.buflen;*/
         if (reply_size) {
@@ -108,12 +141,17 @@ static void serve(struct namedb *namedb)
     QueueHandle_t peerqueue;
     struct thread_context thread_context;
 
-    thread_context.peerqueue =  xQueueCreate( 10, sizeof (peerinfo)); //TODO check if this can fail.
+    ESP_LOGE(__func__, "start serving");
+
+    peerqueue = xQueueCreate( 10, sizeof (peerinfo));
+    thread_context.peerqueue = &peerqueue;
     thread_context.namedb = namedb;
-    xTaskCreate(process_msg, "msg1", 8192, &peerqueue, 5, NULL);
-    xTaskCreate(process_msg, "msg2", 8192, &peerqueue, 5, NULL);
+    ESP_LOGE(__func__, "start serving");
+    xTaskCreate(process_msg, "msg1", 8192, &thread_context, 5, NULL);
+    xTaskCreate(process_msg, "msg2", 8192, &thread_context, 5, NULL);
     // maybe also send socket here
 
+    ESP_LOGE(__func__, "start serving");
     sock = socket(PF_INET, SOCK_DGRAM, 0);
     /*sock = socket(PF_INET6, SOCK_DGRAM, 0);*/
 
@@ -126,9 +164,11 @@ static void serve(struct namedb *namedb)
     /*serverAddr.sin6_port = htons(53);*/
     /*serverAddr.sin6_addr= in6addr_any;*/
 
+    ESP_LOGE(__func__, "start serving");
     bind(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
     addr_size = sizeof peer_addr;
 
+    ESP_LOGE(__func__, "loop");
     while (1) {
         n = recvfrom(sock, buf, BUF_SIZE, 0, (struct sockaddr *)&peer_addr,
              &addr_size);

@@ -133,6 +133,5 @@ int axfr(char *master, char *zone, struct namedb *namedb)
     if (process_axfr_msg(axfr, ntohs(msgin_len), namedb)) {
         ESP_LOGE("AXFR", "failed to process AXFR");
     }
-    free(axfr);
     return 0;
 }

@@ -5,13 +5,6 @@
 #include "tree.h"
 #include "namedb.h"
 
-struct rrset {
-    char *owner;
-    uint32_t *qtype_class;
-    int num;
-    char **payload;
-};
-
 int
 namedb_insert(struct namedb *namedb, char *owner, char *payload)
 {
@@ -29,35 +22,26 @@ namedb_insert(struct namedb *namedb, char *owner, char *payload)
     return tree_insert(namedb->tree, rrset);
 }
 
-char *
+struct rrset *
 namedb_lookup(struct namedb *namedb, char *owner, char *payload)
 {
-    struct rrset *rrset = malloc(sizeof(struct rrset));
-    if (!rrset) return NULL;
-    rrset->owner = owner;
-    rrset->qtype_class = (uint32_t*)payload;
-    rrset->num = 0;
-    rrset->payload = NULL;
-    return tree_lookup(namedb->tree, rrset);
+    ESP_LOGI(__func__, "looking up %s", owner);
+    struct rrset rrset = {
+        .owner = owner,
+        .qtype_class = (uint32_t*)payload
+    };
+    return tree_lookup(namedb->tree, &rrset);
 }
 
-/*BEWARE this function might free(a.owner). as a consequence when deleting
- * nodes we don't know if we can free owner. */
 static int
 namedb_compare(void *a, void *b)
 {
     struct rrset *left = a;
     struct rrset *right = b;
+    ESP_LOGI(__func__, "cmp %s %s", left->owner, right->owner);
     if (*left->qtype_class - *right->qtype_class)
         return *left->qtype_class - *right->qtype_class;
     int c = strcmp(left->owner, right->owner);
-    /*Horrid memory optimization. */
-    /*No DONT DO IT it is as evil as you initially thought it would be*/
-    /*If you do lookups and fail you are no longer sure if you can free owner*/
-    /*if (!c && left->owner != right->owner) {*/
-        /*free(left->owner);*/
-        /*left->owner = right->owner;*/
-    /*}*/
     return c;
 }
 

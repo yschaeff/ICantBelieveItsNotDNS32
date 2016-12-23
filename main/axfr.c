@@ -98,8 +98,8 @@ int axfr(char *master, char *zone, struct namedb *namedb)
     char *msg;
     char *query = "\x09schaeffer\x02tk\x00\x00\xFC\x00\x01";
     char *qhdr = "\xAA\xAA\x00\x20\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00";
-    char *ns = "10.0.0.10";
-    /*char *ns = "ns1.schaeffer.tk";*/
+    /*char *ns = "10.0.0.10";*/
+    char *ns = "ns1.schaeffer.tk";
 
     if ((sock = open_tcpsock(ns)) < 0) return 1;
     /*SEND AXFR REQUEST*/

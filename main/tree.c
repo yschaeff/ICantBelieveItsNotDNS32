@@ -43,6 +43,7 @@ tree_insert(struct tree *tree, void *value)
         parent = ( c==-1 ) ? &(*parent)->left : &(*parent)->right;
     }
     *parent = node;
+    ESP_LOGI(__func__, "insert new");
     return 0;
 }
 

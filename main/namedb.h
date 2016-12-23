@@ -8,10 +8,12 @@ struct namedb {
 };
 
 struct rrset {
-    char *owner;
-    uint32_t *qtype_class;
+    char *owner; /*Uncompressed owner name. Freeable*/
+    uint32_t *qtype_class; /* non-freeable */
     int num;
-    char **payload;
+    char **payload; /* freeable. content not freeable. record
+                       on wire exluding owner name */
+    char *rrsig; /* non-freeable, Same type as payload */
 };
 
 struct namedb *

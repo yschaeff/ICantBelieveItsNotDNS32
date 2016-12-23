@@ -125,7 +125,7 @@ process_msg(void *pvParameter)
             }
         }
         free(peerinfo.buf);
-        vTaskDelay(0);//alloc for GC
+        vTaskDelay(0);//allow for GC
     }
 }
 

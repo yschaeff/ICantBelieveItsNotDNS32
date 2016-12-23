@@ -49,7 +49,6 @@ blink_task(void *pvParameter)
 
 /*Context that passes client and client message to task*/
 struct c_info {
-    int sock;
     char *buf;
     size_t buflen;
     struct sockaddr_storage addr;
@@ -57,6 +56,7 @@ struct c_info {
 };
 
 struct thread_context {
+    int sock;
     QueueHandle_t *peerqueue;
     struct namedb *namedb;
 };
@@ -67,6 +67,7 @@ process_msg(void *pvParameter)
 
     QueueHandle_t *peerqueue = ((struct thread_context *)pvParameter)->peerqueue;
     struct namedb *namedb = ((struct thread_context *)pvParameter)->namedb;
+    int sock = ((struct thread_context *)pvParameter)->sock;
     struct c_info peerinfo;
     ssize_t b_sent;
     char reply[BUF_SIZE];
@@ -116,7 +117,7 @@ process_msg(void *pvParameter)
         reply_size = query_dns_reply(peerinfo.buf, peerinfo.buflen, reply, sizeof reply);
         /*reply_size = peerinfo.buflen;*/
         if (reply_size) {
-            b_sent = sendto(peerinfo.sock, reply, reply_size, 0,
+            b_sent = sendto(sock, reply, reply_size, 0,
             /*b_sent = sendto(peerinfo.sock, peerinfo.buf, reply_size, 0,*/
                (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
             if (b_sent == -1) {
@@ -144,16 +145,15 @@ static void serve(struct namedb *namedb)
     ESP_LOGE(__func__, "start serving");
 
     peerqueue = xQueueCreate( 10, sizeof (peerinfo));
-    thread_context.peerqueue = &peerqueue;
-    thread_context.namedb = namedb;
-    ESP_LOGE(__func__, "start serving");
-    xTaskCreate(process_msg, "msg1", 8192, &thread_context, 5, NULL);
-    xTaskCreate(process_msg, "msg2", 8192, &thread_context, 5, NULL);
-    // maybe also send socket here
 
-    ESP_LOGE(__func__, "start serving");
     sock = socket(PF_INET, SOCK_DGRAM, 0);
     /*sock = socket(PF_INET6, SOCK_DGRAM, 0);*/
+
+    thread_context.peerqueue = &peerqueue;
+    thread_context.namedb = namedb;
+    thread_context.sock = sock;
+    xTaskCreate(process_msg, "msg1", 8192, &thread_context, 5, NULL);
+    xTaskCreate(process_msg, "msg2", 8192, &thread_context, 5, NULL);
 
     memset(&serverAddr, 0, sizeof serverAddr);
     serverAddr.sin_family = AF_INET;
@@ -178,7 +178,6 @@ static void serve(struct namedb *namedb)
         }
         /*printf("rcvd %d bytes\n", n);*/
         memset(&peerinfo, 0, sizeof (struct c_info));
-        peerinfo.sock = sock;
         peerinfo.buf = malloc(n);
         memcpy(peerinfo.buf, buf, n);
         peerinfo.buflen = n;

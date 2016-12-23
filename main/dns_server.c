@@ -82,38 +82,42 @@ process_msg(void *pvParameter)
             continue;
         }
         if (peerinfo.buflen < sizeof(struct dns_header)) {
-            ESP_LOGE(__func__, "packet doesn't fit header");
-            //TODO respond FORMERR
+            ESP_LOGE(__func__, "packet doesn't fit header. Dropping.");
             free(peerinfo.buf);
             continue;
         }
         if (query_pkt_qr_count(peerinfo.buf) < 1) {
             ESP_LOGE(__func__, "no question?");
-            //TODO respond FORMERR
+            query_to_formerr(peerinfo.buf);
+            (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
+               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
             free(peerinfo.buf);
             continue;
         }
         char *owner = peerinfo.buf + sizeof(struct dns_header);
-        char *qtype_class;
-        if (query_find_owner_uncompressed(owner, &qtype_class, peerinfo.buf + peerinfo.buflen))
+        char *payload;
+        if (query_find_owner_uncompressed(owner, &payload, peerinfo.buf + peerinfo.buflen))
         {
             ESP_LOGE(__func__, "Could not parse owner name");
-            //TODO respond FORMERR
+            query_to_formerr(peerinfo.buf);
+            (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
+               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
             free(peerinfo.buf);
             continue;
         }
 
-        //TODO pass result from lookup, payload+num
-        struct rrset *rrset = namedb_lookup(namedb, owner, qtype_class);
+        struct rrset *rrset = namedb_lookup(namedb, owner, payload);
         if (!rrset) {
             ESP_LOGE(__func__, "not is DB");
-            /*TODO: a CNAME MIGHT BE THOUGH*/
-            //TODO respond NXDOMAIN
+            query_to_nxdomain(peerinfo.buf);
+            (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
+               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
             free(peerinfo.buf);
             continue;
         }
         ESP_LOGI(__func__, "Yes! found in DB! rrsetsize: %d", rrset->num);
 
+        //TODO pass result from lookup, payload+num
         reply_size = query_dns_reply(peerinfo.buf, peerinfo.buflen, reply, sizeof reply);
         /*reply_size = peerinfo.buflen;*/
         if (reply_size) {
@@ -204,7 +208,8 @@ void app_main()
         ESP_LOGE(__func__, "namedb init error");
         return; //TODO some soft of panic
     }
-    axfr(NULL, NULL, namedb);
+    char *ns = "ns1.schaeffer.tk";
+    axfr(ns, NULL, namedb);
     xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
     serve(namedb);
 }

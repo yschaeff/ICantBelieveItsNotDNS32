@@ -144,15 +144,25 @@ query_read_rr(char *buf, char *bufend, char **owner_end, uint16_t **qtype, uint1
     return 0;
 }
 
+/*Caller is supposed to sanity checks before calling*/
+void
+query_to_formerr(char *buf)
+{
+    *(uint16_t *)(buf+2) = htons(0x8401);
+}
+/*Caller is supposed to sanity checks before calling*/
+void
+query_to_nxdomain(char *buf)
+{
+    *(uint16_t *)(buf+2) = htons(0x8403);
+}
+
 size_t query_dns_reply(char *inb, size_t inn, char *outb, size_t outn)
 {
     struct dns_header *hdr;
     if (inn < 12) return 0;
 
     hdr = (struct dns_header *) inb; //BAM! no more memcpy!
-    /*printf("%d, %d, %d, %d, %d\n", ntohs(hdr->id), ntohs(hdr->qr_count), ntohs(hdr->an_count),*/
-        /*ntohs(hdr->au_count), ntohs(hdr->ad_count));*/
-
     if (hdr->answer_flag) return 0;
     if (ntohs(hdr->opcode) != 0) return 0;
     if (ntohs(hdr->qr_count) == 0) return 0;

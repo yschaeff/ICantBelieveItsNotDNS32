@@ -1,0 +1,32 @@
+menu "DNS Configuration"
+
+config BLINK_GPIO
+    int "Blink GPIO number"
+	range 0 34
+	default 5
+	help
+		GPIO number (IOxx) to blink on and off.
+		Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used to blink.
+		GPIOs 35-39 are input-only so cannot be used as outputs.
+
+config DNS_SERVER_PORT
+    int "UDP/TCP port"
+    range 1 65635
+    default 53
+    help
+        UDP/TCP port for DNS.
+
+config DNS_SERVER_AXFR_MASTER
+    string "AXFR host"
+    default "ns1.example.com"
+    help
+        FQDN or ip address of host that provided
+        the AXFR.
+
+config DNS_SERVER_AXFR_ZONE
+    string "Zone to ask AXFR for"
+    default "example.com"
+    help
+        Zone to transfer
+
+endmenu

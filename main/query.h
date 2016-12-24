@@ -55,4 +55,7 @@ query_printname(char *name);
 void
 printx(char *buf, size_t len);
 
+char *
+query_axfr_rr(char *z);
+
 #endif /*QUERY_H*/

@@ -202,3 +202,25 @@ query_axfr_msg(char *qhdr, char *query, int tcp, size_t *s)
     return buf;
 }
 
+char *
+query_axfr_rr(char *z)
+{
+    char *rr = malloc(strlen(z) + 6); /*This might be to much but never to few*/
+    char *l = rr;
+    char *p = rr+1;
+    *l = 0;
+    while (*z) {
+        if (*z == '.') {
+            *p = 0;
+            l = p;
+        } else {
+            *p = *z;
+            (*l)++;
+        }
+        z++;
+        p++;
+    }
+    *p = 0;
+    *(uint32_t *)++p = htonl(0x00FC0001);
+    return rr;
+}

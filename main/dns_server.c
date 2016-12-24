@@ -31,6 +31,8 @@
 
 #define BLINK_GPIO CONFIG_BLINK_GPIO
 #define DNS_SERVER_PORT CONFIG_DNS_SERVER_PORT
+#define ZONE CONFIG_DNS_SERVER_AXFR_ZONE
+#define MASTER CONFIG_DNS_SERVER_AXFR_MASTER
 
 #define MS(ms) ((ms) / portTICK_RATE_MS)
 
@@ -208,8 +210,7 @@ void app_main()
         ESP_LOGE(__func__, "namedb init error");
         return; //TODO some soft of panic
     }
-    char *ns = "ns1.schaeffer.tk";
-    axfr(ns, NULL, namedb);
+    axfr(MASTER, ZONE, namedb);
     xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
     serve(namedb);
 }

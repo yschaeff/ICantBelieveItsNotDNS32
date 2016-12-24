@@ -96,16 +96,18 @@ int axfr(char *master, char *zone, struct namedb *namedb)
     size_t msgout_len;
     uint16_t msgin_len; //network byte order!
     char *msg;
-    char *query = "\x09schaeffer\x02tk\x00\x00\xFC\x00\x01";
+    char *query = query_axfr_rr(zone);
     char *qhdr = "\xAA\xAA\x00\x20\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00";
 
     if ((sock = open_tcpsock(master)) < 0) return 1;
     /*SEND AXFR REQUEST*/
     if (!(msg = query_axfr_msg(qhdr, query, 1, &msgout_len))) {
+        free(query);
         close(sock);
         ESP_LOGE("AXFR", "construct q failed\n");
         return 1;
     }
+    free(query);
     write(sock, msg, msgout_len);
     free(msg);
 

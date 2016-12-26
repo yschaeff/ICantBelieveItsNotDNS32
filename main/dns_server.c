@@ -29,10 +29,10 @@
 
 #define BUF_SIZE 2048
 
-#define BLINK_GPIO CONFIG_BLINK_GPIO
+#define BLINK_GPIO      CONFIG_BLINK_GPIO
 #define DNS_SERVER_PORT CONFIG_DNS_SERVER_PORT
-#define ZONE CONFIG_DNS_SERVER_AXFR_ZONE
-#define MASTER CONFIG_DNS_SERVER_AXFR_MASTER
+#define ZONE            CONFIG_DNS_SERVER_AXFR_ZONE
+#define MASTER          CONFIG_DNS_SERVER_AXFR_MASTER
 
 #define MS(ms) ((ms) / portTICK_RATE_MS)
 
@@ -111,6 +111,7 @@ process_msg(void *pvParameter)
         struct rrset *rrset = namedb_lookup(namedb, owner, payload);
         if (!rrset) {
             ESP_LOGE(__func__, "not is DB");
+            /*TODO: NOERROR no data*/
             query_to_nxdomain(peerinfo.buf);
             (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
                (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
@@ -119,12 +120,15 @@ process_msg(void *pvParameter)
         }
         ESP_LOGI(__func__, "Yes! found in DB! rrsetsize: %d", rrset->num);
 
+        /*rrset contains: payload, rrsig*/
+        reply_size = query_reply_from_rrset(peerinfo.buf, peerinfo.buflen,
+            payload, reply, sizeof reply, rrset->payload, rrset->num,
+            rrset->rrsig);
         //TODO pass result from lookup, payload+num
-        reply_size = query_dns_reply(peerinfo.buf, peerinfo.buflen, reply, sizeof reply);
-        /*reply_size = peerinfo.buflen;*/
+        /*reply_size = query_dns_reply(peerinfo.buf, peerinfo.buflen, reply,*/
+            /*sizeof reply);*/
         if (reply_size) {
             b_sent = sendto(sock, reply, reply_size, 0,
-            /*b_sent = sendto(peerinfo.sock, peerinfo.buf, reply_size, 0,*/
                (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
             if (b_sent == -1) {
                 perror("sendto");

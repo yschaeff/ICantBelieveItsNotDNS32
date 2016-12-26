@@ -157,6 +157,27 @@ query_to_nxdomain(char *buf)
     *(uint16_t *)(buf+2) = htons(0x8403);
 }
 
+size_t
+query_reply_from_rrset(char *query, size_t qlen, char *payload,
+    char *answer, size_t alen, char **rr, size_t rr_count, char *rrsig)
+{
+    struct dns_header *hdr;
+    char *p;
+    memcpy(answer, query, (payload-query) + 8); /*hdr + question*/
+    hdr = (struct dns_header *)answer;
+    hdr->an_count = htons((uint16_t)rr_count);
+    hdr->ad_count = 0;
+    p = answer + (payload - query) + 4;
+    for (size_t i = 0; i < rr_count; i++) {
+        *(uint16_t *)p = htons(0xC00C);
+        uint16_t rdata_len = ntohs(*(uint16_t *)(rr[i]+8));
+        memcpy(p+2, rr[i], 10+rdata_len);
+        p += 12 + rdata_len;
+    }
+    /*TODO: rrsig*/
+    return p - answer;
+}
+
 size_t query_dns_reply(char *inb, size_t inn, char *outb, size_t outn)
 {
     struct dns_header *hdr;

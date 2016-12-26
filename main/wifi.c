@@ -13,15 +13,8 @@
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 
-#include "wifi.h"
-
 #include "passwords.h"
-#define EXAMPLE_WIFI_SSID "mancave"
-#define EXAMPLE_WIFI_PASS MANCAVE_PASSWORD
-/*#define EXAMPLE_WIFI_SSID "honeypot"*/
-/*#define EXAMPLE_WIFI_PASS HONEYPOT_PASSWORD*/
-/*#define EXAMPLE_WIFI_SSID "NLnetLabs"*/
-/*#define EXAMPLE_WIFI_PASS NLNETLABS_PASSWORD*/
+#include "wifi.h"
 
 #define MS(ms) ((ms) / portTICK_RATE_MS)
 const int DHCP_BIT = BIT0;

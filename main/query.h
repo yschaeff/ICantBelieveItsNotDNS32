@@ -38,6 +38,10 @@ query_axfr_msg(char *qhdr, char *query, int tcp, size_t *s);
 int
 query_find_owner_uncompressed(char *start, char **end, char *bufend);
 
+size_t
+query_reply_from_rrset(char *query, size_t qlen, char *payload, char *answer, size_t alen,
+    char **rr, size_t rr_count, char *rrsig);
+
 int
 query_read_rr(char *buf, char *bufend, char **owner_end, uint16_t **qtype, uint16_t **qclass, uint32_t **ttl, uint16_t **rdatalen, char **rdata);
 

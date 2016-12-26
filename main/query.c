@@ -164,8 +164,11 @@ query_reply_from_rrset(char *query, size_t qlen, char *payload,
     struct dns_header *hdr;
     char *p;
     memcpy(answer, query, (payload-query) + 8); /*hdr + question*/
+    *(uint16_t *)(answer+2) = htons(0x8100);
     hdr = (struct dns_header *)answer;
+    hdr->qr_count = htons(1);
     hdr->an_count = htons((uint16_t)rr_count);
+    hdr->au_count = 0;
     hdr->ad_count = 0;
     p = answer + (payload - query) + 4;
     for (size_t i = 0; i < rr_count; i++) {

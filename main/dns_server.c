@@ -119,14 +119,10 @@ process_msg(void *pvParameter)
             continue;
         }
         ESP_LOGI(__func__, "Yes! found in DB! rrsetsize: %d", rrset->num);
-
         /*rrset contains: payload, rrsig*/
         reply_size = query_reply_from_rrset(peerinfo.buf, peerinfo.buflen,
             payload, reply, sizeof reply, rrset->payload, rrset->num,
             rrset->rrsig);
-        //TODO pass result from lookup, payload+num
-        /*reply_size = query_dns_reply(peerinfo.buf, peerinfo.buflen, reply,*/
-            /*sizeof reply);*/
         if (reply_size) {
             b_sent = sendto(sock, reply, reply_size, 0,
                (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
@@ -135,7 +131,7 @@ process_msg(void *pvParameter)
             }
         }
         free(peerinfo.buf);
-        vTaskDelay(0);//allow for GC
+        vTaskDelay(0);//allow for GC TODO: is this needed?
     }
 }
 

@@ -133,7 +133,7 @@ tree_insert(struct tree *tree, void *value)
             return 0;
         }
         node->parent = *n;
-        n = ( c==-1 ) ? &(*n)->left : &(*n)->right;
+        n = ( c < 0 ) ? &(*n)->left : &(*n)->right;
     }
     *n = node;
     rb_tree_fix(tree, node);
@@ -152,3 +152,17 @@ tree_lookup(struct tree *tree, void *value)
     return NULL;
 }
 
+void
+tree_walk_recurse(struct node *node, void cb(void *, int), int lvl)
+{
+    if (!node) return;
+    tree_walk_recurse(node->left, cb, lvl+1);
+    cb(node->value, lvl);
+    tree_walk_recurse(node->right, cb, lvl+1);
+}
+
+void
+tree_walk(struct tree *tree, void cb(void *, int))
+{
+    tree_walk_recurse(tree->root, cb, 0);
+}

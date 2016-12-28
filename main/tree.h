@@ -16,4 +16,7 @@ tree_insert(struct tree *tree, void *value);
 void *
 tree_lookup(struct tree *tree, void *value);
 
+void
+tree_walk(struct tree *tree, void cb(void *, int));
+
 #endif

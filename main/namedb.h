@@ -5,6 +5,7 @@
 
 struct namedb {
     struct tree *tree;
+    struct tree *denial_tree;
 };
 
 struct rrset {

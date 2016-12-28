@@ -50,6 +50,7 @@ print_rrset(void *value, int lvl)
 int
 namedb_insert(struct namedb *namedb, char *owner, char *payload)
 {
+    int r;
     struct rrset *rrset = malloc(sizeof(struct rrset));
     if (!rrset) return 1;
     rrset->owner = owner;
@@ -72,8 +73,13 @@ namedb_insert(struct namedb *namedb, char *owner, char *payload)
         }
         rrset->payload[0] = payload;
     }
-    int r = tree_insert(namedb->tree, rrset);
-    tree_walk(namedb->tree, print_rrset);
+    if (*(uint16_t *)payload == NSEC ||*(uint16_t *)payload  == NSEC3) {
+        r = tree_insert(namedb->denial_tree, rrset);
+        tree_walk(namedb->denial_tree, print_rrset);
+    } else {
+        r = tree_insert(namedb->tree, rrset);
+        tree_walk(namedb->tree, print_rrset);
+    }
     return r;
 }
 
@@ -94,14 +100,14 @@ namedb_compare(void *a, void *b)
 {
     struct rrset *left = a;
     struct rrset *right = b;
-    ESP_LOGI(__func__, "%s %d - %s %d", left->owner, ntohs(*left->qtype_class), right->owner, ntohs(*right->qtype_class));
+    ESP_LOGD(__func__, "%s %d - %s %d", left->owner, ntohs(*left->qtype_class), right->owner, ntohs(*right->qtype_class));
     int c = strcmp(left->owner, right->owner);
     if (c) return c;
 
-    if (*(uint16_t*)right->qtype_class == CNAME && !(*(uint16_t*)right->qtype_class == NSEC || *(uint16_t*)right->qtype_class == NSEC3)) {
+    if (*(uint16_t*)right->qtype_class == CNAME) {
         /*CNAME matches with everything. Though we still need to cmp CLASS*/
-        ESP_LOGE(__func__, "right is CNAME!");
-        return *((uint16_t *)left->qtype_class + 1) - *((uint16_t *)right->qtype_class + 1);
+        ESP_LOGV(__func__, "right is CNAME!");
+        return ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));
     }
     c = ntohs(*((uint16_t *)left->qtype_class)) - ntohs(*((uint16_t *)right->qtype_class));
     if (c) return c;
@@ -115,7 +121,7 @@ namedb_merge(void *a, void *b)
     struct rrset *to = b;
     uint16_t to_qtype = *(uint16_t*)to->qtype_class;
     uint16_t from_qtype = *(uint16_t*)from->qtype_class;
-    ESP_LOGI(__func__, "%s %d - %s %d", from->owner, ntohs(*from->qtype_class), to->owner, ntohs(*to->qtype_class));
+    ESP_LOGD(__func__, "%s %d - %s %d", from->owner, ntohs(*from->qtype_class), to->owner, ntohs(*to->qtype_class));
     if (to_qtype != CNAME /*|| from_qtype == CNAME*/) {
         /*CNAME ocludes everything*/
         /*This should also work if one or both are empty;*/
@@ -141,6 +147,7 @@ namedb_init()
     namedb = malloc(sizeof(struct namedb));
     if (!namedb) return NULL;
     namedb->tree = tree_init(namedb_compare, namedb_merge);
+    namedb->denial_tree = tree_init(namedb_compare, namedb_merge);
     if (namedb->tree) return namedb;
     free(namedb);
     return NULL;

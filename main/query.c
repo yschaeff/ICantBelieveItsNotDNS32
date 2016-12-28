@@ -52,6 +52,7 @@ query_find_owner_compressed(char *pkt, size_t pktlen, char *start)
                 ESP_LOGE(__func__, "Unable to allocate buffer.");
                 return NULL;
             }
+            /*for (int j = i-1; j >= 0; j--) { //For canonical ordering*/
             for (int j = 0; j < i; j++) {
                 memcpy(rp, ptr[j], *ptr[j]+1);
                 rp += *ptr[j]+1;

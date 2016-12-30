@@ -53,40 +53,35 @@ open_tcpsock(char *host)
 static int
 process_axfr_msg(char *buf, int buflen, struct namedb *namedb)
 {
-    char *c = buf + 12;
+    char *owner = buf + 12;
     char *bufend = buf+buflen-1;
+    char *owner_end, *rdata;
+    uint16_t *rdatalen;
 
-    if (query_find_owner_uncompressed(c, &c, bufend)) return 1;
-    if ((c += 4) > bufend) return 1;
+    if (query_find_owner_uncompressed(owner, &owner, bufend)) return 1;
+    if ((owner += 4) > bufend) return 1;
     /*We are now at the start of the answer section*/
     uint16_t an_count = query_pkt_an_count(buf);
-    for (; an_count; an_count--) {
-        if (c >= bufend) {
+    if (an_count && query_read_rr(owner, bufend, &owner_end, &rdatalen, &rdata)) {
+        ESP_LOGE(__func__, "Failed to read starting SOA record");
+        return 1;
+    }
+    owner = rdata + ntohs(*rdatalen);
+    for (an_count--; an_count; an_count--) {
+        if (owner >= bufend) {
             ESP_LOGW(__func__, "out of packet with %" PRIu16, an_count);
             break;
         }
-        char *owner, *owner_end, *rdata, *next;
-        uint16_t *qtype, *qclass, *rdatalen;
-        uint32_t *ttl;
-
-        if (query_read_rr(c, bufend, &owner_end, &qtype, &qclass, &ttl, &rdatalen, &rdata)) {
-            printf("FAIL\n");
+        if (query_read_rr(owner, bufend, &owner_end, &rdatalen, &rdata)) {
+            ESP_LOGE(__func__, "Failed to parse RR");
             return 1;
         }
-        owner = c;
-
-        //do stuff here
+        owner_end = query_decompress_rdata(buf, buflen, owner_end);
         char *name = query_find_owner_compressed(buf, buflen, owner);
-        if (name) {
-            query_printname(name);
-            printf("\n");
-            namedb_insert(namedb, name, owner_end);
-        }
-
-        ESP_LOGI(__func__, "len: %" PRIu16, ntohs(*rdatalen));
-        c = rdata + ntohs(*rdatalen);
+        if (name) namedb_insert(namedb, name, owner_end);
+        ESP_LOGV(__func__, "len: %" PRIu16, ntohs(*rdatalen));
+        owner = rdata + ntohs(*rdatalen);
     }
-    ESP_LOGI(__func__, "bytes left: %d pkts: %" PRIu16 "/%" PRIu16, bufend-c+1, an_count, query_pkt_an_count(buf));
     return 0;
 }
 

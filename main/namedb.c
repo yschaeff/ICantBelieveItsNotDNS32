@@ -4,20 +4,8 @@
 #include "lwip/sockets.h"
 
 #include "tree.h"
+#include "query.h"
 #include "namedb.h"
-
-#define A (htons(1))
-#define NS (htons(2))
-#define CNAME (htons(5))
-#define SOA (htons(6))
-#define MX (htons(15))
-#define TXT (htons(16))
-#define AAAA (htons(28))
-#define RRSIG (htons(46))
-#define NSEC  (htons(47))
-#define DNSKEY  (htons(48))
-#define NSEC3 (htons(50))
-#define NSEC3PARAM (htons(0))
 
 static char*
 type_to_name(uint16_t type)
@@ -100,18 +88,23 @@ namedb_compare(void *a, void *b)
 {
     struct rrset *left = a;
     struct rrset *right = b;
-    ESP_LOGD(__func__, "%s %d - %s %d", left->owner, ntohs(*left->qtype_class), right->owner, ntohs(*right->qtype_class));
+    ESP_LOGI(__func__, "%s %d - %s %d", left->owner, ntohs(*left->qtype_class), right->owner, ntohs(*right->qtype_class));
     int c = strcmp(left->owner, right->owner);
+    printf("strcmp: %d\n", c);
+    if (c) return c;
+    c = ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));
+    printf("class: %d\n", c);
     if (c) return c;
 
     if (*(uint16_t*)right->qtype_class == CNAME) {
         /*CNAME matches with everything. Though we still need to cmp CLASS*/
         ESP_LOGV(__func__, "right is CNAME!");
-        return ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));
+        return 0;
+        /*return ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));*/
     }
-    c = ntohs(*((uint16_t *)left->qtype_class)) - ntohs(*((uint16_t *)right->qtype_class));
-    if (c) return c;
-    return ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));
+    return ntohs(*((uint16_t *)left->qtype_class)) - ntohs(*((uint16_t *)right->qtype_class));
+    /*if (c) return c;*/
+    /*return ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));*/
 }
 
 static void

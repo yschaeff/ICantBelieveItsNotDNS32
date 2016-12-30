@@ -16,6 +16,57 @@
 
 #define MAX_LABEL_COUNT 63
 
+int
+is_compressed(char *name)
+{
+    while (*name) {
+        if ((*name & 0xC0) == 0xC0) return 1;
+        name += *name + 1;
+    }
+    return 0;
+}
+
+char *
+query_decompress_rdata(char *buf, int buflen, char *owner_end)
+{
+    if (*((uint16_t *)(owner_end+2)) != CLASS_IN)
+        return owner_end;
+
+    uint16_t qtype = *(uint16_t *)owner_end;
+
+    if (qtype == CNAME || qtype == NS) {
+        if (!is_compressed(owner_end+10)) return owner_end;
+        char *name = query_find_owner_compressed(buf, buflen, owner_end+10);
+        char *n = malloc(strlen(name) + 11);
+        memcpy(n, owner_end, 8);
+        *(int16_t *)(n+8) = htons(strlen(name)+1);
+        memcpy(n+10, name, strlen(name)+1);
+        free(name);
+        return n;
+    } else if (qtype == MX) {
+        if (!is_compressed(owner_end+12)) return owner_end;
+        char *name = query_find_owner_compressed(buf, buflen, owner_end+12);
+        char *n = malloc(strlen(name) + 13);
+        memcpy(n, owner_end, 8);
+        *(int16_t *)(n+8) = htons(strlen(name)+3);
+        *(int16_t *)(n+10) = *(uint16_t *)(owner_end + 10);
+        memcpy(n+12, name, strlen(name)+3);
+        free(name);
+        return n;
+    } else if (qtype == SOA) {
+        /*SOA is a bit difficult. the master server can be compressed as well as*/
+        /*the following email address. (but where does it start?). To hack around*/
+        /*this always point to the question.*/
+        char *n = malloc(10 + 4 + 20);
+        memcpy(n, owner_end, 8);
+        *(int16_t *)(n+8) = htons(24);
+        *(int32_t *)(n+10) = htonl(0xC00CC00C);
+        memcpy(n+14, owner_end+10 + ntohs(*(uint16_t *)(owner_end+8)) - 20, 20);
+        return n;
+    }
+    return owner_end;
+}
+
 //find end of owner name. 1 on error, 0 otherwise
 //end will be the first byte not part of the name
 //On error **end is undefined
@@ -126,22 +177,12 @@ printx(char *buf, size_t len)
 }
 
 int
-query_read_rr(char *buf, char *bufend, char **owner_end, uint16_t **qtype, uint16_t **qclass, uint32_t **ttl, uint16_t **rdatalen, char **rdata)
+query_read_rr(char *buf, char *bufend, char **owner_end, uint16_t **rdatalen, char **rdata)
 {
     /*printx(buf, 40);*/
-    ESP_LOGD(__func__, "starting from %p", buf);
     if (query_find_owner_uncompressed(buf, owner_end, bufend)) return 1;
-    ESP_LOGD(__func__, "ownerend from %p (%d)", *owner_end, *owner_end-buf+1);
-    *qtype    = (uint16_t *)(*owner_end + 0);
-    ESP_LOGD(__func__, "qtype from %p", *qtype);
-    *qclass   = (uint16_t *)(*owner_end + 2);
-    ESP_LOGD(__func__, "qclass from %p", *qclass);
-    *ttl      = (uint32_t *)(*owner_end + 4);
-    ESP_LOGD(__func__, "ttl from %p", *ttl);
     *rdatalen = (uint16_t *)(*owner_end + 8);
-    ESP_LOGD(__func__, "rdatalen from %p", *rdatalen);
     *rdata    = (*owner_end + 10);
-    ESP_LOGD(__func__, "rdata from %p", *rdata);
     return 0;
 }
 
@@ -197,9 +238,9 @@ size_t query_dns_reply(char *inb, size_t inn, char *outb, size_t outn)
     if (query_find_owner_uncompressed(inb+12, &owner_end, inb+inn)) return 0;
     if (owner_end + 2*(sizeof (uint16_t)) > inb + inn) return 0;
 
-    uint16_t *qtype, *qclass;
-    qtype  = (uint16_t *)(owner_end + 0);
-    qclass = (uint16_t *)(owner_end + 2);
+    /*uint16_t *qtype, *qclass;*/
+    /*qtype  = (uint16_t *)(owner_end + 0);*/
+    /*qclass = (uint16_t *)(owner_end + 2);*/
 
     /*printf("type: %d, class: %d\n", ntohs(*qtype), ntohs(*qclass));*/
 

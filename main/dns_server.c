@@ -98,8 +98,7 @@ process_msg(void *pvParameter)
         }
         char *owner = peerinfo.buf + sizeof(struct dns_header);
         char *payload;
-        if (query_find_owner_uncompressed(owner, &payload, peerinfo.buf + peerinfo.buflen))
-        {
+        if (query_find_owner_uncompressed(owner, &payload, peerinfo.buf + peerinfo.buflen)) {
             ESP_LOGE(__func__, "Could not parse owner name");
             query_to_formerr(peerinfo.buf);
             (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,

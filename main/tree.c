@@ -147,7 +147,7 @@ tree_lookup(struct tree *tree, void *value)
     while (parent) {
         int c = tree->cmp(value, parent->value);
         if (!c) return parent->value;
-        parent = (c == -1) ? parent->left : parent->right;
+        parent = (c < 0) ? parent->left : parent->right;
     }
     return NULL;
 }

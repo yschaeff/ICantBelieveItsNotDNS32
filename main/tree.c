@@ -15,7 +15,7 @@ struct node {
 };
 
 struct tree *
-tree_init(int (*cmp)(void *, void *), void (*merge)(void *, void *))
+tree_init(int (*cmp)(void *, void *, void *), void (*merge)(void *, void *))
 {
     struct tree *tree = malloc(sizeof(struct tree));
     if (!tree) return NULL;
@@ -126,7 +126,7 @@ tree_insert(struct tree *tree, void *value)
     n = &tree->root;
 
     while ( *n != NULL ) {
-        int c = tree->cmp(node->value, (*n)->value);
+        int c = tree->cmp(node->value, (*n)->value, NULL);
         if (!c) {
             tree->merge(node->value, (*n)->value);
             free(node);
@@ -141,11 +141,11 @@ tree_insert(struct tree *tree, void *value)
 }
 
 void *
-tree_lookup(struct tree *tree, void *value)
+tree_lookup(struct tree *tree, void *value, void *usr)
 {
     struct node *parent = tree->root;
     while (parent) {
-        int c = tree->cmp(value, parent->value);
+        int c = tree->cmp(value, parent->value, usr);
         if (!c) return parent->value;
         parent = (c < 0) ? parent->left : parent->right;
     }

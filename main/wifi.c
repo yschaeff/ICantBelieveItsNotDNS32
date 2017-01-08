@@ -25,11 +25,12 @@ struct known_ap {
     char *passwd;
 };
 
-#define KNOWN_AP_COUNT 3
+#define KNOWN_AP_COUNT 4
 struct known_ap known_aps[KNOWN_AP_COUNT] = {
     {.ssid = "mancave",   .passwd = MANCAVE_PASSWORD  },
     {.ssid = "honeypot",  .passwd = HONEYPOT_PASSWORD },
-    {.ssid = "NLnetLabs", .passwd = NLNETLABS_PASSWORD}
+    {.ssid = "NLnetLabs", .passwd = NLNETLABS_PASSWORD},
+    {.ssid = "wl500g-2",  .passwd = WL500G_PASSWORD}
 };
 
 static esp_err_t
@@ -113,14 +114,16 @@ wifi_network_up()
             if (!match) continue;
 
             wifi_config_t wifi_config;
-            strncpy(wifi_config.sta.ssid, known_aps[j].ssid, 32);
-            strncpy(wifi_config.sta.password, known_aps[j].passwd, 64);
+            strncpy((char *)wifi_config.sta.ssid, known_aps[j].ssid, 32);
+            strncpy((char *)wifi_config.sta.password, known_aps[j].passwd, 64);
             ESP_LOGI("WIFI", "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
             esp_wifi_stop();
             esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
             esp_wifi_start();
             printf("Waiting for IP address...\n");
-            while (!(xEventGroupWaitBits(evg, DHCP_BIT , pdFALSE, pdTRUE, MS(100)) & DHCP_BIT));
+            while (!(xEventGroupWaitBits(evg, DHCP_BIT , pdFALSE, pdTRUE, MS(1000)) & DHCP_BIT)) {
+                printf("Waiting for IP address...\n");
+            }
             /*check connection? timeout on DHCPBIT?*/
             connected = 1;
             if (connected) break;

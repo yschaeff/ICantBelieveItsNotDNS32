@@ -3,18 +3,18 @@
 
 struct tree {
     struct node *root;
-    int (*cmp)(void *, void *);
+    int (*cmp)(void *, void *, void *);
     void (*merge)(void *, void *);
 };
 
 struct tree *
-tree_init(int (*cmp)(void *, void *), void (*merge)(void *, void *));
+tree_init(int (*cmp)(void *, void *, void *), void (*merge)(void *, void *));
 
 int
 tree_insert(struct tree *tree, void *value);
 
 void *
-tree_lookup(struct tree *tree, void *value);
+tree_lookup(struct tree *tree, void *value, void *usr);
 
 void
 tree_walk(struct tree *tree, void cb(void *, int));

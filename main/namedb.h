@@ -24,7 +24,7 @@ int
 namedb_insert(struct namedb *namedb, char *owner, char *payload);
 
 struct rrset *
-namedb_lookup(struct namedb *namedb, char *owner, char *payload);
+namedb_lookup(struct namedb *namedb, char *owner, char *payload, int *nxdomain);
 
 #endif
 

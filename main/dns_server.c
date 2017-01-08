@@ -107,21 +107,26 @@ process_msg(void *pvParameter)
             continue;
         }
 
-        struct rrset *rrset = namedb_lookup(namedb, owner, payload);
-        if (!rrset) {
+        int nxdomain = 1;
+        struct rrset *rrset = namedb_lookup(namedb, owner, payload, &nxdomain);
+        if (!rrset && nxdomain) {
             ESP_LOGE(__func__, "not is DB");
-            /*TODO: NOERROR no data*/
             query_to_nxdomain(peerinfo.buf);
             (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
                (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
             free(peerinfo.buf);
             continue;
         }
-        ESP_LOGI(__func__, "Yes! found in DB! rrsetsize: %d", rrset->num);
         /*rrset contains: payload, rrsig*/
-        reply_size = query_reply_from_rrset(peerinfo.buf, peerinfo.buflen,
-            payload, reply, sizeof reply, rrset->payload, rrset->num,
-            rrset->rrsig);
+        if (rrset) {
+            ESP_LOGD(__func__, "Yes! found in DB! rrsetsize: %d", rrset->num);
+            reply_size = query_reply_from_rrset(peerinfo.buf, peerinfo.buflen,
+                payload, reply, sizeof reply, rrset->payload, rrset->num,
+                rrset->rrsig);
+        } else { //NOERROR NODATA
+            reply_size = query_reply_from_rrset(peerinfo.buf, peerinfo.buflen,
+                payload, reply, sizeof reply, NULL, 0, NULL);
+        }
         if (reply_size) {
             b_sent = sendto(sock, reply, reply_size, 0,
                (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);

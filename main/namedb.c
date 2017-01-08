@@ -40,13 +40,15 @@ namedb_insert(struct namedb *namedb, char *owner, char *payload)
 {
     int r;
     struct rrset *rrset = malloc(sizeof(struct rrset));
-    if (!rrset) return 1;
+    if (!rrset) {
+        ESP_LOGE(__func__, "Malloc failure.");
+        return 1;
+    }
     rrset->owner = owner;
     rrset->qtype_class = (uint32_t*)payload;
     /* If this is a rrsig insert it as associated rr instead. But instead
      * if the payload add a rrsig */
     if (*(uint16_t *)payload == RRSIG) {
-        /*free(rrset); return 0;*/
         rrset->num = 0;
         rrset->rrsig = payload;
         *(uint16_t *)payload = *(((uint16_t *)payload) + 5);
@@ -72,39 +74,34 @@ namedb_insert(struct namedb *namedb, char *owner, char *payload)
 }
 
 struct rrset *
-namedb_lookup(struct namedb *namedb, char *owner, char *payload)
+namedb_lookup(struct namedb *namedb, char *owner, char *payload, int *nxdomain)
 {
-    ESP_LOGI(__func__, "looking up %s", owner);
+    ESP_LOGD(__func__, "looking up %s", owner);
     struct rrset rrset = {
         .owner = owner,
         .qtype_class = (uint32_t*)payload
     };
-    /*TODO: for consistency I think we only need to return num and payload and rrsig*/
-    return tree_lookup(namedb->tree, &rrset);
+    return tree_lookup(namedb->tree, &rrset, nxdomain);
 }
 
 static int
-namedb_compare(void *a, void *b)
+namedb_compare(void *a, void *b, void *usr)
 {
+    ESP_LOGD(__func__, "looking up");
     struct rrset *left = a;
     struct rrset *right = b;
-    ESP_LOGI(__func__, "%s %d - %s %d", left->owner, ntohs(*left->qtype_class), right->owner, ntohs(*right->qtype_class));
     int c = strcmp(left->owner, right->owner);
-    printf("strcmp: %d\n", c);
     if (c) return c;
-    c = ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));
-    printf("class: %d\n", c);
+    if (usr) *(int *)usr = 0;
+    c = *((uint16_t *)left->qtype_class + 1) - *((uint16_t *)right->qtype_class + 1);
     if (c) return c;
 
     if (*(uint16_t*)right->qtype_class == CNAME) {
-        /*CNAME matches with everything. Though we still need to cmp CLASS*/
+        /*CNAME matches with everything.*/
         ESP_LOGV(__func__, "right is CNAME!");
         return 0;
-        /*return ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));*/
     }
-    return ntohs(*((uint16_t *)left->qtype_class)) - ntohs(*((uint16_t *)right->qtype_class));
-    /*if (c) return c;*/
-    /*return ntohs(*((uint16_t *)left->qtype_class + 1)) - ntohs(*((uint16_t *)right->qtype_class + 1));*/
+    return *((uint16_t *)left->qtype_class) - *((uint16_t *)right->qtype_class);
 }
 
 static void
@@ -115,7 +112,7 @@ namedb_merge(void *a, void *b)
     uint16_t to_qtype = *(uint16_t*)to->qtype_class;
     uint16_t from_qtype = *(uint16_t*)from->qtype_class;
     ESP_LOGD(__func__, "%s %d - %s %d", from->owner, ntohs(*from->qtype_class), to->owner, ntohs(*to->qtype_class));
-    if (to_qtype != CNAME /*|| from_qtype == CNAME*/) {
+    if (to_qtype != CNAME) {
         /*CNAME ocludes everything*/
         /*This should also work if one or both are empty;*/
         to->payload = realloc(to->payload, (to->num + from->num) * sizeof(char*));

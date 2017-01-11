@@ -31,20 +31,20 @@ open_tcpsock(char *host)
     /*int error = getaddrinfo(host, "DNS_SERVER_PORT", &hint, &res);*/
     int error = getaddrinfo(host, "53", &hint, &res);
     if (error) {
-        printf("getaddrinfo failed\n");
+        ESP_LOGE(__func__, "getaddrinfo failed");
         return -1;
     }
     s = socket(res->ai_family, res->ai_socktype, 0);
     if (s < 0) {
         freeaddrinfo(res);
-        printf("sock failed\n");
+        ESP_LOGE(__func__, "sock failed");
         return -1;
     }
     error = connect(s, res->ai_addr, res->ai_addrlen);
     freeaddrinfo(res);
     if (error) {
         close(s);
-        printf("connect failed\n");
+        ESP_LOGE(__func__, "connect failed");
         return -1;
     }
     return s;
@@ -99,7 +99,7 @@ int axfr(char *master, char *zone, struct namedb *namedb)
     if (!(msg = query_axfr_msg(qhdr, query, 1, &msgout_len))) {
         free(query);
         close(sock);
-        ESP_LOGE("AXFR", "construct q failed\n");
+        ESP_LOGE(__func__, "construct q failed");
         return 1;
     }
     free(query);
@@ -109,10 +109,10 @@ int axfr(char *master, char *zone, struct namedb *namedb)
     /*RECV AXFR*/
     ssize_t l = read(sock, &msgin_len, 2);
     if (l != 2) {
-        ESP_LOGE("AXFR", "fail %d\n", l);
+        ESP_LOGE(__func__, "fail %d", l);
         perror("read");
     }
-    ESP_LOGI("AXFR", "need to allocate %d bytes\n", ntohs(msgin_len));
+    ESP_LOGI(__func__, "need to allocate %d bytes", ntohs(msgin_len));
     size_t bLeft = ntohs(msgin_len);
     char *axfr = malloc(bLeft);
     char *p = axfr;
@@ -121,7 +121,7 @@ int axfr(char *master, char *zone, struct namedb *namedb)
         /*TODO: handle error*/
         bLeft -= l;
         p += l;
-        ESP_LOGI(__func__, "read %d bytes, %d to go\n", l, bLeft);
+        ESP_LOGD(__func__, "read %d bytes, %d to go", l, bLeft);
     }
 
     close(sock);

@@ -93,9 +93,9 @@ wifi_network_up()
           .channel = 0,
           .show_hidden = true
         };
-        ESP_LOGI("WIFI", "Scanning for networks");
+        ESP_LOGI(__func__, "Scanning for networks");
         ESP_ERROR_CHECK(esp_wifi_scan_start(&scanConf, 0));
-        ESP_LOGD("WIFI", "waiting for scan to complete.");
+        ESP_LOGD(__func__, "waiting for scan to complete.");
         xEventGroupClearBits(evg, SCAN_BIT);
         while (!(xEventGroupWaitBits(evg, SCAN_BIT , pdFALSE, pdTRUE, MS(100)) & SCAN_BIT));
         esp_wifi_scan_get_ap_num(&apCount);
@@ -116,20 +116,15 @@ wifi_network_up()
             wifi_config_t wifi_config;
             strncpy((char *)wifi_config.sta.ssid, known_aps[j].ssid, 32);
             strncpy((char *)wifi_config.sta.password, known_aps[j].passwd, 64);
-            ESP_LOGI("WIFI", "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
+            ESP_LOGI(__func__, "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
             esp_wifi_stop();
             esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
             esp_wifi_start();
-            printf("Waiting for IP address...\n");
-            while (!(xEventGroupWaitBits(evg, DHCP_BIT , pdFALSE, pdTRUE, MS(1000)) & DHCP_BIT)) {
-                printf("Waiting for IP address...\n");
-            }
-            /*check connection? timeout on DHCPBIT?*/
-            connected = 1;
+            ESP_LOGI(__func__, "Waiting for IP address...");
+            connected = xEventGroupWaitBits(evg, DHCP_BIT , pdFALSE, pdTRUE, MS(5000)) & DHCP_BIT;
             if (connected) break;
         }
     }
     return ESP_OK;
 }
-
 

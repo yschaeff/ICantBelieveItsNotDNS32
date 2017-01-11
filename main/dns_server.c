@@ -107,9 +107,10 @@ process_msg(void *pvParameter)
             continue;
         }
 
-        int nxdomain = 1;
-        struct rrset *rrset = namedb_lookup(namedb, owner, payload, &nxdomain);
-        if (!rrset && nxdomain) {
+        int owner_found = 0; /* if owner name is found but the RR can't be found
+                                we shouldn't return NXDOMAIN */
+        struct rrset *rrset = namedb_lookup(namedb, owner, payload, &owner_found);
+        if (!rrset && !owner_found) {
             ESP_LOGE(__func__, "not is DB");
             query_to_nxdomain(peerinfo.buf);
             (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
@@ -135,7 +136,6 @@ process_msg(void *pvParameter)
             }
         }
         free(peerinfo.buf);
-        vTaskDelay(0);//allow for GC TODO: is this needed?
     }
 }
 
@@ -151,8 +151,6 @@ static void serve(struct namedb *namedb)
     struct c_info peerinfo;
     QueueHandle_t peerqueue;
     struct thread_context thread_context;
-
-    ESP_LOGE(__func__, "start serving");
 
     peerqueue = xQueueCreate( 10, sizeof (peerinfo));
 
@@ -174,11 +172,10 @@ static void serve(struct namedb *namedb)
     /*serverAddr.sin6_port = htons(53);*/
     /*serverAddr.sin6_addr= in6addr_any;*/
 
-    ESP_LOGE(__func__, "start serving");
+    ESP_LOGI(__func__, "start serving");
     bind(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
     addr_size = sizeof peer_addr;
 
-    ESP_LOGE(__func__, "loop");
     while (1) {
         n = recvfrom(sock, buf, BUF_SIZE, 0, (struct sockaddr *)&peer_addr,
              &addr_size);
@@ -195,6 +192,7 @@ static void serve(struct namedb *namedb)
         peerinfo.addr_size = addr_size;
         if (!xQueueSend(peerqueue, &peerinfo, 100)) {
             ESP_LOGW(__func__, "Queue full, dropping packet");
+            free(peerinfo.buf);
         }
     }
 }
@@ -215,6 +213,6 @@ void app_main()
         return; //TODO some soft of panic
     }
     axfr(MASTER, ZONE, namedb);
-    xTaskCreate(&blink_task, "blink_task", 512, NULL, 5, NULL);
+    xTaskCreate(&blink_task, "blink_task", 512, NULL, 0, NULL);
     serve(namedb);
 }

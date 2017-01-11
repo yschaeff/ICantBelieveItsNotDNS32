@@ -7,6 +7,15 @@
 #include "query.h"
 #include "namedb.h"
 
+struct namedb {
+    struct tree *tree;
+    struct tree *denial_tree;
+};
+/** struct namedb
+ * tree, structure to store resource records
+ * denail_tree, structure to store NSEC(3) records
+ */
+
 static char*
 type_to_name(uint16_t type)
 {
@@ -65,34 +74,43 @@ namedb_insert(struct namedb *namedb, char *owner, char *payload)
     }
     if (*(uint16_t *)payload == NSEC ||*(uint16_t *)payload  == NSEC3) {
         r = tree_insert(namedb->denial_tree, rrset);
-        tree_walk(namedb->denial_tree, print_rrset);
+        /*tree_walk(namedb->denial_tree, print_rrset);*/
     } else {
         r = tree_insert(namedb->tree, rrset);
-        tree_walk(namedb->tree, print_rrset);
+        /*tree_walk(namedb->tree, print_rrset);*/
     }
     return r;
 }
 
 struct rrset *
-namedb_lookup(struct namedb *namedb, char *owner, char *payload, int *nxdomain)
+namedb_lookup(struct namedb *namedb, char *owner, char *payload, int *owner_match)
 {
     ESP_LOGD(__func__, "looking up %s", owner);
     struct rrset rrset = {
         .owner = owner,
         .qtype_class = (uint32_t*)payload
     };
-    return tree_lookup(namedb->tree, &rrset, nxdomain);
+    return tree_lookup(namedb->tree, &rrset, owner_match);
 }
 
+/** compare two rrsets. if owner_match given set to 1 if the two rrsets have 
+ * the same owner name.
+ *
+ * @param      a   rrset, left side of comparison
+ * @param      b   rrset, right side of comparison
+ * @param[out] owner_match pointer to int to indicate owner names of the rrset
+ *                 match. Allowed to be NULL;
+ * @return negative, 0, or positive.
+ */
 static int
-namedb_compare(void *a, void *b, void *usr)
+namedb_compare(void *a, void *b, void *owner_match)
 {
     ESP_LOGD(__func__, "looking up");
     struct rrset *left = a;
     struct rrset *right = b;
     int c = strcmp(left->owner, right->owner);
     if (c) return c;
-    if (usr) *(int *)usr = 0;
+    if (owner_match) *(int *)owner_match = 1;
     c = *((uint16_t *)left->qtype_class + 1) - *((uint16_t *)right->qtype_class + 1);
     if (c) return c;
 
@@ -104,13 +122,17 @@ namedb_compare(void *a, void *b, void *usr)
     return *((uint16_t *)left->qtype_class) - *((uint16_t *)right->qtype_class);
 }
 
+/** merge left argument into right argument. Left will be freed
+ *
+ * @param src   rrset to be merged in to the tree
+ * @param dst   rrset destination for merge
+ */
 static void
-namedb_merge(void *a, void *b)
+namedb_merge(void *src, void *dst)
 {
-    struct rrset *from = a;
-    struct rrset *to = b;
+    struct rrset *from = src;
+    struct rrset *to = dst;
     uint16_t to_qtype = *(uint16_t*)to->qtype_class;
-    uint16_t from_qtype = *(uint16_t*)from->qtype_class;
     ESP_LOGD(__func__, "%s %d - %s %d", from->owner, ntohs(*from->qtype_class), to->owner, ntohs(*to->qtype_class));
     if (to_qtype != CNAME) {
         /*CNAME ocludes everything*/
@@ -138,8 +160,12 @@ namedb_init()
     if (!namedb) return NULL;
     namedb->tree = tree_init(namedb_compare, namedb_merge);
     namedb->denial_tree = tree_init(namedb_compare, namedb_merge);
-    if (namedb->tree) return namedb;
-    free(namedb);
-    return NULL;
+    if (!namedb->tree || !namedb->denial_tree) {
+        free(namedb->tree);
+        free(namedb->denial_tree);
+        free(namedb);
+        return NULL;
+    }
+    return namedb;
 }
 

@@ -6,6 +6,12 @@
 
 enum color {RED, BLACK};
 
+struct tree {
+    struct node *root;
+    int (*cmp)(void *, void *, void *);
+    void (*merge)(void *, void *);
+};
+
 struct node {
     void *value;
     struct node *parent;
@@ -25,6 +31,9 @@ tree_init(int (*cmp)(void *, void *, void *), void (*merge)(void *, void *))
     return tree;
 }
 
+/*
+ * Rotate subtree to the right
+ */
 void
 rb_tree_rotright(struct tree *tree, struct node *g)
 {
@@ -45,6 +54,9 @@ rb_tree_rotright(struct tree *tree, struct node *g)
     g->parent = p;
 }
 
+/*
+ * Rotate subtree to the left
+ */
 void
 rb_tree_rotleft(struct tree *tree, struct node *g)
 {
@@ -65,6 +77,10 @@ rb_tree_rotleft(struct tree *tree, struct node *g)
     g->parent = p;
 }
 
+/*
+ * rebalance the tree. This must be called after the node insertion. Failure
+ * to call this after every insert will cause an imbalanced tree.
+ */
 void
 rb_tree_fix(struct tree *tree, struct node *node)
 {
@@ -143,11 +159,11 @@ tree_insert(struct tree *tree, void *value)
 void *
 tree_lookup(struct tree *tree, void *value, void *usr)
 {
-    struct node *parent = tree->root;
-    while (parent) {
-        int c = tree->cmp(value, parent->value, usr);
-        if (!c) return parent->value;
-        parent = (c < 0) ? parent->left : parent->right;
+    struct node *node = tree->root;
+    while (node) {
+        int c = tree->cmp(value, node->value, usr);
+        if (!c) return node->value;
+        node = (c < 0) ? node->left : node->right;
     }
     return NULL;
 }

@@ -13,7 +13,6 @@
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 
-#include "passwords.h"
 #include "wifi.h"
 
 #define MS(ms) ((ms) / portTICK_RATE_MS)
@@ -25,12 +24,36 @@ struct known_ap {
     char *passwd;
 };
 
+#ifdef CONFIG_DNS_SERVER_AP5
+#define KNOWN_AP_COUNT 5
+#elif CONFIG_DNS_SERVER_AP4
 #define KNOWN_AP_COUNT 4
+#elif CONFIG_DNS_SERVER_AP3
+#define KNOWN_AP_COUNT 3
+#elif CONFIG_DNS_SERVER_AP2
+#define KNOWN_AP_COUNT 2
+#elif CONFIG_DNS_SERVER_AP1
+#define KNOWN_AP_COUNT 1
+#else
+#define KNOWN_AP_COUNT 0
+#endif
+
 struct known_ap known_aps[KNOWN_AP_COUNT] = {
-    {.ssid = "mancave",   .passwd = MANCAVE_PASSWORD  },
-    {.ssid = "honeypot",  .passwd = HONEYPOT_PASSWORD },
-    {.ssid = "NLnetLabs", .passwd = NLNETLABS_PASSWORD},
-    {.ssid = "wl500g-2",  .passwd = WL500G_PASSWORD}
+#ifdef CONFIG_SERVER_AP1 
+    {.ssid = CONFIG_SERVER_AP1_SSID,   .passwd = CONFIG_SERVER_AP1_PASSWORD  }
+#ifdef CONFIG_SERVER_AP2 
+    , {.ssid = CONFIG_SERVER_AP2_SSID,   .passwd = CONFIG_SERVER_AP2_PASSWORD  }
+#ifdef CONFIG_SERVER_AP3 
+    , {.ssid = CONFIG_SERVER_AP3_SSID,   .passwd = CONFIG_SERVER_AP3_PASSWORD  }
+#ifdef CONFIG_SERVER_AP4 
+    , {.ssid = CONFIG_SERVER_AP4_SSID,   .passwd = CONFIG_SERVER_AP4_PASSWORD  }
+#ifdef CONFIG_SERVER_AP5 
+    , {.ssid = CONFIG_SERVER_AP5_SSID,   .passwd = CONFIG_SERVER_AP5_PASSWORD  }
+#endif
+#endif
+#endif
+#endif
+#endif
 };
 
 static esp_err_t
@@ -106,7 +129,7 @@ wifi_network_up()
         for (int i = 0; i < apCount; i++) {
             int j, match = 0;
             for (j = 0; j < KNOWN_AP_COUNT; j ++) {
-                if (!strcmp((char *)list[i].ssid, known_aps[j].ssid)) {
+                if (!strcasecmp((char *)list[i].ssid, known_aps[j].ssid)) {
                     match = 1;
                     break;
                 }
@@ -114,7 +137,7 @@ wifi_network_up()
             if (!match) continue;
 
             wifi_config_t wifi_config;
-            strncpy((char *)wifi_config.sta.ssid, known_aps[j].ssid, 32);
+            strncpy((char *)wifi_config.sta.ssid, (char *)list[i].ssid, 32);
             strncpy((char *)wifi_config.sta.password, known_aps[j].passwd, 64);
             ESP_LOGI(__func__, "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
             esp_wifi_stop();

@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := dns_server
+PROJECT_NAME := icbind32
 
 include $(IDF_PATH)/make/project.mk
 

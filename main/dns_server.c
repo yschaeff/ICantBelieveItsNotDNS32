@@ -49,152 +49,108 @@ blink_task(void *pvParameter)
     }
 }
 
-/*Context that passes client and client message to task*/
-struct c_info {
-    char *buf;
-    size_t buflen;
-    struct sockaddr_storage addr;
-    socklen_t addr_size;
-};
-
 struct thread_context {
     int sock;
-    QueueHandle_t *peerqueue;
     struct namedb *namedb;
 };
 
-static void
-process_msg(void *pvParameter)
+static int
+process_msg(struct namedb *namedb, char *recvbuf, size_t recvlen,
+    char *sendbuf, size_t sendlen)
 {
+    if (recvlen < sizeof(struct dns_header)) {
+        ESP_LOGE(__func__, "packet doesn't fit header. Dropping.");
+        return 0;
+    }
+    if (query_pkt_qr_count(recvbuf) < 1) {
+        ESP_LOGE(__func__, "no question?");
+        memcpy(sendbuf, recvbuf, recvlen);
+        query_to_formerr(sendbuf);
+        return recvlen;
+    }
+    char *owner = recvbuf + sizeof(struct dns_header);
+    char *payload;
+    if (query_find_owner_uncompressed(owner, &payload, recvbuf + recvlen)) {
+        ESP_LOGE(__func__, "Could not parse owner name");
+        memcpy(sendbuf, recvbuf, recvlen);
+        query_to_formerr(sendbuf);
+        return recvlen;
+    }
 
-    QueueHandle_t *peerqueue = ((struct thread_context *)pvParameter)->peerqueue;
+    int owner_found = 0; /* if owner name is found but the RR can't be found
+                            we shouldn't return NXDOMAIN */
+    struct rrset *rrset = namedb_lookup(namedb, owner, payload, &owner_found);
+    if (!rrset && !owner_found) {
+        ESP_LOGE(__func__, "not is DB");
+        memcpy(sendbuf, recvbuf, recvlen);
+        query_to_nxdomain(sendbuf);
+        return recvlen;
+    }
+    /*rrset contains: payload, rrsig*/
+    if (rrset) {
+        ESP_LOGD(__func__, "Yes! found in DB! rrsetsize: %d", rrset->num);
+        sendlen = query_reply_from_rrset(recvbuf, recvlen,
+            payload, sendbuf, sizeof sendbuf, rrset->payload, rrset->num,
+            rrset->rrsig);
+    } else { //NOERROR NODATA
+        sendlen = query_reply_from_rrset(recvbuf, recvlen,
+            payload, sendbuf, sizeof sendbuf, NULL, 0, NULL);
+    }
+    return sendlen;
+}
+
+static void
+handle_udp(void *pvParameter)
+{
     struct namedb *namedb = ((struct thread_context *)pvParameter)->namedb;
     int sock = ((struct thread_context *)pvParameter)->sock;
-    struct c_info peerinfo;
     ssize_t b_sent;
-    char reply[BUF_SIZE];
-    ssize_t reply_size;
-
-    /*char *host = ipaddr_ntoa(((struct sockaddr_in6)peerinfo->addr).sin_addr);*/
-    /*char *port = lwip_ntohs(peerinfo->addr.sin_port);*/
-    /*printf("peer %s, port %s\n", host, port);*/
+    char recvbuf[BUF_SIZE];
+    char sendbuf[BUF_SIZE];
+    ssize_t recvlen, sendlen;
+    struct sockaddr_storage peer_addr;
+    socklen_t addr_size = sizeof (struct sockaddr_storage);
 
     while (1) {
-        if (!xQueueReceive(*peerqueue, &peerinfo, MS(10000))) {
+        recvlen = recvfrom(sock, recvbuf, BUF_SIZE, 0,
+            (struct sockaddr *)&peer_addr, &addr_size);
+        if (recvlen == -1) {
+            perror("recvfrom");
             continue;
         }
-        if (peerinfo.buflen < sizeof(struct dns_header)) {
-            ESP_LOGE(__func__, "packet doesn't fit header. Dropping.");
-            free(peerinfo.buf);
-            continue;
-        }
-        if (query_pkt_qr_count(peerinfo.buf) < 1) {
-            ESP_LOGE(__func__, "no question?");
-            query_to_formerr(peerinfo.buf);
-            (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
-               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
-            free(peerinfo.buf);
-            continue;
-        }
-        char *owner = peerinfo.buf + sizeof(struct dns_header);
-        char *payload;
-        if (query_find_owner_uncompressed(owner, &payload, peerinfo.buf + peerinfo.buflen)) {
-            ESP_LOGE(__func__, "Could not parse owner name");
-            query_to_formerr(peerinfo.buf);
-            (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
-               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
-            free(peerinfo.buf);
-            continue;
-        }
-
-        int owner_found = 0; /* if owner name is found but the RR can't be found
-                                we shouldn't return NXDOMAIN */
-        struct rrset *rrset = namedb_lookup(namedb, owner, payload, &owner_found);
-        if (!rrset && !owner_found) {
-            ESP_LOGE(__func__, "not is DB");
-            query_to_nxdomain(peerinfo.buf);
-            (void) sendto(sock, peerinfo.buf, peerinfo.buflen, 0,
-               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
-            free(peerinfo.buf);
-            continue;
-        }
-        /*rrset contains: payload, rrsig*/
-        if (rrset) {
-            ESP_LOGD(__func__, "Yes! found in DB! rrsetsize: %d", rrset->num);
-            reply_size = query_reply_from_rrset(peerinfo.buf, peerinfo.buflen,
-                payload, reply, sizeof reply, rrset->payload, rrset->num,
-                rrset->rrsig);
-        } else { //NOERROR NODATA
-            reply_size = query_reply_from_rrset(peerinfo.buf, peerinfo.buflen,
-                payload, reply, sizeof reply, NULL, 0, NULL);
-        }
-        if (reply_size) {
-            b_sent = sendto(sock, reply, reply_size, 0,
-               (struct sockaddr *)&peerinfo.addr, peerinfo.addr_size);
+        sendlen = process_msg(namedb, recvbuf, recvlen, sendbuf, BUF_SIZE);
+        if (!sendlen) continue;
+        while (sendlen > 0) {
+            b_sent = sendto(sock, sendbuf, sendlen, 0,
+               (struct sockaddr *)&peer_addr, addr_size);
             if (b_sent == -1) {
                 perror("sendto");
+                break;
             }
+            sendlen -= b_sent;
         }
-        free(peerinfo.buf);
     }
 }
 
 static void serve(struct namedb *namedb)
 {
     int sock;
-    size_t n;
-    char buf[BUF_SIZE];
     struct sockaddr_in serverAddr;
-    /*struct sockaddr_in6 serverAddr;*/
-    struct sockaddr_storage peer_addr;
-    socklen_t addr_size;
-    struct c_info peerinfo;
-    QueueHandle_t peerqueue;
     struct thread_context thread_context;
 
-    peerqueue = xQueueCreate( 10, sizeof (peerinfo));
-
     sock = socket(PF_INET, SOCK_DGRAM, 0);
-    /*sock = socket(PF_INET6, SOCK_DGRAM, 0);*/
-
-    thread_context.peerqueue = &peerqueue;
-    thread_context.namedb = namedb;
-    thread_context.sock = sock;
-    xTaskCreate(process_msg, "msg1", 8192, &thread_context, 5, NULL);
-    xTaskCreate(process_msg, "msg2", 8192, &thread_context, 5, NULL);
-
     memset(&serverAddr, 0, sizeof serverAddr);
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(DNS_SERVER_PORT);
-    /*serverAddr.sin_addr.s_addr = inet_addr("10.0.0.16");*/
     serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    /*serverAddr.sin6_family = AF_INET6;*/
-    /*serverAddr.sin6_port = htons(53);*/
-    /*serverAddr.sin6_addr= in6addr_any;*/
+    bind(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
+
+    thread_context.namedb = namedb;
+    thread_context.sock = sock;
 
     ESP_LOGI(__func__, "start serving");
-    bind(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
-    addr_size = sizeof peer_addr;
-
-    while (1) {
-        n = recvfrom(sock, buf, BUF_SIZE, 0, (struct sockaddr *)&peer_addr,
-             &addr_size);
-        if (n == -1) {
-            perror("recvfrom");
-            continue;
-        }
-        /*printf("rcvd %d bytes\n", n);*/
-        memset(&peerinfo, 0, sizeof (struct c_info));
-        peerinfo.buf = malloc(n);
-        memcpy(peerinfo.buf, buf, n);
-        peerinfo.buflen = n;
-        peerinfo.addr = peer_addr;
-        peerinfo.addr_size = addr_size;
-        if (!xQueueSend(peerqueue, &peerinfo, 100)) {
-            ESP_LOGW(__func__, "Queue full, dropping packet");
-            free(peerinfo.buf);
-        }
-    }
+    xTaskCreate(handle_udp, "msg1", 8192, &thread_context, 5, NULL);
+    /*xTaskCreate(handle_udp, "msg2", 8192, &thread_context, 5, NULL);*/
 }
 
 void app_main()

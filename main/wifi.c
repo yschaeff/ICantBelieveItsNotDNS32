@@ -1,22 +1,19 @@
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <unistd.h>
-#include <string.h>//memset
-#include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 
 #include "freertos/event_groups.h"
+
 #include "esp_wifi.h"
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_event_loop.h"
-#include "lwip/err.h"
-#include "lwip/sockets.h"
 
 #include "sdkconfig.h"
+
 #include "wifi.h"
 
-#define MS(ms) ((ms) / portTICK_RATE_MS)
 const int SCAN_BIT = BIT0;
 const int STRT_BIT = BIT1;
 const int DISC_BIT = BIT2;
@@ -27,31 +24,17 @@ struct known_ap {
     char *passwd;
 };
 
-#ifdef CONFIG_DNS_SERVER_AP5
-#define KNOWN_AP_COUNT 5
-#elif CONFIG_DNS_SERVER_AP4
-#define KNOWN_AP_COUNT 4
-#elif CONFIG_DNS_SERVER_AP3
-#define KNOWN_AP_COUNT 3
-#elif CONFIG_DNS_SERVER_AP2
-#define KNOWN_AP_COUNT 2
-#elif CONFIG_DNS_SERVER_AP1
-#define KNOWN_AP_COUNT 1
-#else
-#define KNOWN_AP_COUNT 0
-#endif
-
-struct known_ap known_aps[KNOWN_AP_COUNT] = {
-#ifdef CONFIG_DNS_SERVER_AP1 
-      {.ssid = CONFIG_DNS_SERVER_AP1_SSID, .passwd = CONFIG_DNS_SERVER_AP1_PASSWORD}
-#ifdef CONFIG_DNS_SERVER_AP2 
-    , {.ssid = CONFIG_DNS_SERVER_AP2_SSID, .passwd = CONFIG_DNS_SERVER_AP2_PASSWORD}
-#ifdef CONFIG_DNS_SERVER_AP3 
-    , {.ssid = CONFIG_DNS_SERVER_AP3_SSID, .passwd = CONFIG_DNS_SERVER_AP3_PASSWORD}
-#ifdef CONFIG_DNS_SERVER_AP4 
-    , {.ssid = CONFIG_DNS_SERVER_AP4_SSID, .passwd = CONFIG_DNS_SERVER_AP4_PASSWORD}
-#ifdef CONFIG_DNS_SERVER_AP5 
-    , {.ssid = CONFIG_DNS_SERVER_AP5_SSID, .passwd = CONFIG_DNS_SERVER_AP5_PASSWORD}
+struct known_ap known_aps[CONFIG_WIFI_AP_COUNT] = {
+#ifdef CONFIG_WIFI_AP1
+      {.ssid = CONFIG_WIFI_AP1_SSID, .passwd = CONFIG_WIFI_AP1_PASSWORD}
+#ifdef CONFIG_WIFI_AP2
+    , {.ssid = CONFIG_WIFI_AP2_SSID, .passwd = CONFIG_WIFI_AP2_PASSWORD}
+#ifdef CONFIG_WIFI_AP3
+    , {.ssid = CONFIG_WIFI_AP3_SSID, .passwd = CONFIG_WIFI_AP3_PASSWORD}
+#ifdef CONFIG_WIFI_AP4
+    , {.ssid = CONFIG_WIFI_AP4_SSID, .passwd = CONFIG_WIFI_AP4_PASSWORD}
+#ifdef CONFIG_WIFI_AP5
+    , {.ssid = CONFIG_WIFI_AP5_SSID, .passwd = CONFIG_WIFI_AP5_PASSWORD}
 #endif
 #endif
 #endif
@@ -120,21 +103,24 @@ wifi_network_up()
     while (!done) {
         switch (state) {
         case 0:
-            while (!(xEventGroupWaitBits(evg, STRT_BIT , pdFALSE, pdFALSE, MS(5000)) & STRT_BIT));
+            while (!(xEventGroupWaitBits(evg, STRT_BIT , pdFALSE, pdFALSE, portMAX_DELAY) & STRT_BIT));
             xEventGroupClearBits(evg, SCAN_BIT);
             ESP_ERROR_CHECK(esp_wifi_scan_start(&scanConf, 0));
-            while (!(xEventGroupWaitBits(evg, SCAN_BIT , pdFALSE, pdFALSE, MS(5000)) & SCAN_BIT));
+            while (!(xEventGroupWaitBits(evg, SCAN_BIT , pdFALSE, pdFALSE, portMAX_DELAY) & SCAN_BIT));
             apCount = 0;
             esp_wifi_scan_get_ap_num(&apCount);
             if (!apCount) break;
             free(list);
             list = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * apCount);
             ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&apCount, list));
+            for (i = 0; i < apCount; i++) {
+                ESP_LOGD(__func__, "%d %s", list[i].rssi, (char *)list[i].ssid);
+            }
             i = 0;
         case 1:
             state = 0;
             for (match = 0; i < apCount && !match; i++) {
-                for (j = 0; j < KNOWN_AP_COUNT && !match; j++) {
+                for (j = 0; j < CONFIG_WIFI_AP_COUNT && !match; j++) {
                     match = !strcasecmp((char *)list[i].ssid, known_aps[j].ssid);
                 }
             }
@@ -149,7 +135,7 @@ wifi_network_up()
             ESP_LOGI(__func__, "Waiting for IP address...");
             state = 2;
         case 2:
-            f = xEventGroupWaitBits(evg, DHCP_BIT|DISC_BIT , pdFALSE, pdFALSE, MS(100));
+            f = xEventGroupWaitBits(evg, DHCP_BIT|DISC_BIT , pdFALSE, pdFALSE, portMAX_DELAY);
             if (f & DISC_BIT) state = 1;
             done = f & DHCP_BIT;
         }

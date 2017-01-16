@@ -132,25 +132,67 @@ handle_udp(void *pvParameter)
     }
 }
 
+static void
+handle_tcp(void *pvParameter)
+{
+    struct namedb *namedb = ((struct thread_context *)pvParameter)->namedb;
+    int sock = ((struct thread_context *)pvParameter)->sock;
+    ssize_t b_sent;
+    char recvbuf[BUF_SIZE];
+    char sendbuf[BUF_SIZE];
+    ssize_t recvlen, sendlen;
+    struct sockaddr_storage peer_addr;
+    socklen_t addr_size = sizeof (struct sockaddr_storage);
+
+    while (1) {
+        int fd = accept(sock, (struct sockaddr *)&peer_addr, &addr_size);
+        ESP_LOGV(__func__, "accept");
+        recvlen = recv(fd, recvbuf, BUF_SIZE, 0);
+        if (recvlen == -1) {
+            perror("recvfrom");
+            continue;
+        }
+        sendlen = process_msg(namedb, recvbuf+2, recvlen-2, sendbuf+2, BUF_SIZE-2);
+        if (!sendlen) continue;
+        *(uint16_t *)sendbuf = htons((uint16_t)sendlen);
+        while (sendlen > 0) {
+            b_sent = send(fd, sendbuf, sendlen+2, 0);
+            if (b_sent == -1) {
+                perror("sendto");
+                break;
+            }
+            sendlen -= b_sent;
+        }
+    }
+}
+
 static void serve(struct namedb *namedb)
 {
-    int sock;
+    int udpsock, tcpsock;
     struct sockaddr_in serverAddr;
-    struct thread_context thread_context;
+    struct thread_context udp_ctx;
+    struct thread_context tcp_ctx;
 
-    sock = socket(PF_INET, SOCK_DGRAM, 0);
     memset(&serverAddr, 0, sizeof serverAddr);
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(DNS_SERVER_PORT);
     serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    bind(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
 
-    thread_context.namedb = namedb;
-    thread_context.sock = sock;
+    udpsock = socket(PF_INET, SOCK_DGRAM, 0);
+    tcpsock = socket(PF_INET, SOCK_STREAM, 0);
+    bind(udpsock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
+    bind(tcpsock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
+
+    listen(tcpsock, 10);
+
+    udp_ctx.namedb = namedb;
+    udp_ctx.sock = udpsock;
+    tcp_ctx.namedb = namedb;
+    tcp_ctx.sock = tcpsock;
 
     ESP_LOGI(__func__, "start serving");
-    xTaskCreate(handle_udp, "msg1", 8192, &thread_context, 5, NULL);
-    /*xTaskCreate(handle_udp, "msg2", 8192, &thread_context, 5, NULL);*/
+    xTaskCreate(handle_udp, "msg1", 8192, &udp_ctx, 5, NULL);
+    xTaskCreate(handle_tcp, "msg2", 8192, &tcp_ctx, 5, NULL);
 }
 
 void app_main()

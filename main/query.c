@@ -190,13 +190,15 @@ query_read_rr(char *buf, char *bufend, char **owner_end, uint16_t **rdatalen, ch
 void
 query_to_formerr(char *buf)
 {
-    *(uint16_t *)(buf+2) = htons(0x8401);
+    buf[2] = 0x84 | (buf[2]&0x01);
+    buf[3] = 0x01;
 }
 /*Caller is supposed to sanity checks before calling*/
 void
 query_to_nxdomain(char *buf)
 {
-    *(uint16_t *)(buf+2) = htons(0x8403);
+    buf[2] = 0x84 | (buf[2]&0x01);
+    buf[3] = 0x03;
 }
 
 size_t
@@ -206,7 +208,8 @@ query_reply_from_rrset(char *query, size_t qlen, char *payload,
     struct dns_header *hdr;
     char *p;
     memcpy(answer, query, (payload-query) + 8); /*hdr + question*/
-    *(uint16_t *)(answer+2) = htons(0x8100);
+    answer[2] = 0x84 | (query[2]&0x01);
+    answer[3] = 0x00;
     hdr = (struct dns_header *)answer;
     hdr->qr_count = htons(1);
     hdr->an_count = htons((uint16_t)rr_count);
@@ -221,31 +224,6 @@ query_reply_from_rrset(char *query, size_t qlen, char *payload,
     }
     /*TODO: rrsig*/
     return p - answer;
-}
-
-size_t query_dns_reply(char *inb, size_t inn, char *outb, size_t outn)
-{
-    struct dns_header *hdr;
-    if (inn < 12) return 0;
-
-    hdr = (struct dns_header *) inb; //BAM! no more memcpy!
-    if (hdr->answer_flag) return 0;
-    if (ntohs(hdr->opcode) != 0) return 0;
-    if (ntohs(hdr->qr_count) == 0) return 0;
-    if (inn < 13) return 0;
-
-    char *owner_end;
-    if (query_find_owner_uncompressed(inb+12, &owner_end, inb+inn)) return 0;
-    if (owner_end + 2*(sizeof (uint16_t)) > inb + inn) return 0;
-
-    /*uint16_t *qtype, *qclass;*/
-    /*qtype  = (uint16_t *)(owner_end + 0);*/
-    /*qclass = (uint16_t *)(owner_end + 2);*/
-
-    /*printf("type: %d, class: %d\n", ntohs(*qtype), ntohs(*qclass));*/
-
-    memmove(outb, inb, inn);
-    return inn;
 }
 
 /*Construct AXFR query from header and q_record.*/

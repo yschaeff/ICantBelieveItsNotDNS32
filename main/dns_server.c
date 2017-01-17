@@ -163,6 +163,7 @@ handle_tcp(void *pvParameter)
             }
             sendlen -= b_sent;
         }
+        close(fd);
     }
 }
 

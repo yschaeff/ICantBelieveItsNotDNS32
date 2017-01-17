@@ -145,25 +145,31 @@ handle_tcp(void *pvParameter)
     socklen_t addr_size = sizeof (struct sockaddr_storage);
 
     while (1) {
-        int fd = accept(sock, (struct sockaddr *)&peer_addr, &addr_size);
+        int con = accept(sock, (struct sockaddr *)&peer_addr, &addr_size);
         ESP_LOGV(__func__, "accept");
-        recvlen = recv(fd, recvbuf, BUF_SIZE, 0);
+        recvlen = recv(con, recvbuf, BUF_SIZE, 0);
         if (recvlen == -1) {
             perror("recvfrom");
+            close(con);
+            continue;
+        }
+        if (ntohs(*(uint16_t *)recvbuf) != recvlen-2) {
+            ESP_LOGW(__func__, "truncated TCP query");
+            close(con);
             continue;
         }
         sendlen = process_msg(namedb, recvbuf+2, recvlen-2, sendbuf+2, BUF_SIZE-2);
         if (!sendlen) continue;
         *(uint16_t *)sendbuf = htons((uint16_t)sendlen);
         while (sendlen > 0) {
-            b_sent = send(fd, sendbuf, sendlen+2, 0);
+            b_sent = send(con, sendbuf, sendlen+2, 0);
             if (b_sent == -1) {
                 perror("sendto");
                 break;
             }
             sendlen -= b_sent;
         }
-        close(fd);
+        close(con);
     }
 }
 

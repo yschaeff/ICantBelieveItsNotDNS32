@@ -81,7 +81,7 @@ process_msg(struct namedb *namedb, char *recvbuf, size_t recvlen,
                             we shouldn't return NXDOMAIN */
     struct rrset *rrset = namedb_lookup(namedb, owner, payload, &owner_found);
     if (!rrset && !owner_found) {
-        ESP_LOGE(__func__, "not is DB");
+        ESP_LOGD(__func__, "not is DB");
         memcpy(sendbuf, recvbuf, recvlen);
         query_to_nxdomain(sendbuf);
         return recvlen;

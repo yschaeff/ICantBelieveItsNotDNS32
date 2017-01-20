@@ -76,6 +76,12 @@ process_msg(struct namedb *namedb, char *recvbuf, size_t recvlen,
         query_to_formerr(sendbuf);
         return recvlen;
     }
+    char *opt;
+    size_t opt_len;
+    opt = query_find_opt(recvbuf, recvlen, &opt_len);
+    if (opt) {
+        ESP_LOGE(__func__, "OPT!");
+    }
 
     int owner_found = 0; /* if owner name is found but the RR can't be found
                             we shouldn't return NXDOMAIN */

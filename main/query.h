@@ -9,6 +9,7 @@
 #define TXT (htons(16))
 #define AAAA (htons(28))
 #define RRSIG (htons(46))
+#define OPT  (htons(41))
 #define NSEC  (htons(47))
 #define DNSKEY  (htons(48))
 #define NSEC3 (htons(50))
@@ -75,5 +76,8 @@ printx(char *buf, size_t len);
 
 char *
 query_axfr_rr(char *z);
+
+char *
+query_find_opt(char *buf, size_t buflen, size_t *optlen);
 
 #endif /*QUERY_H*/

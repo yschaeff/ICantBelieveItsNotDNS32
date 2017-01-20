@@ -135,6 +135,65 @@ query_find_owner_compressed(char *pkt, size_t pktlen, char *start)
     return NULL;
 }
 
+static char *
+query_read_rr2(char *buf, char *last, uint16_t *rrtype, int qr, char **rdata,
+    uint16_t **rdatalen)
+{
+    char *end;
+    int r = query_find_owner_uncompressed(buf, &end, last);
+    if (r) return NULL;
+    if (end + 2 > last) return NULL;
+    *rrtype = *(uint16_t *)end;
+    end += 2;
+    if (qr) return end;
+    end += 6;
+    if (end > last) return NULL;
+    *rdatalen = (uint16_t *)end;
+    *rdata = end + 2;
+    end += 2 + ntohs(*(uint16_t *)end);
+    if (end-1 > last) return NULL;
+    return end;
+}
+
+
+int
+query_read_rr(char *buf, char *bufend, char **owner_end, uint16_t **rdatalen,
+    char **rdata)
+{
+    uint16_t rtype;
+    char *rr =  query_read_rr2(buf, bufend, &rtype, 0, rdata, rdatalen);
+    *owner_end = *rdata - 10;
+    return rr == NULL;
+}
+
+char *
+query_find_opt(char *buf, size_t buflen, size_t *optlen)
+{
+    struct dns_header *hdr;
+    hdr = (struct dns_header *)buf;
+    if (ntohs(hdr->ad_count) == 0) return NULL;
+    char *end, *start = buf;
+    uint16_t rrtype, *count, *rdatalen;
+    char *last = buf+buflen-1;
+    char *rdata;
+
+    count = &hdr->qr_count;
+    for (int sec = 0; sec < 4; sec++) {
+        for (int rr = 0; rr < ntohs(*count); count++) {
+            end = query_read_rr2(start, last, &rrtype, count == &hdr->qr_count, &rdata, &rdatalen);
+            if (!end) return NULL;
+            if (count == &hdr->ad_count) {
+                if (rrtype == OPT) {
+                    *optlen = end-start;
+                    return start;
+                }
+            }
+            start = end;
+        }
+    }
+    return NULL;
+}
+
 void
 query_printname(char *name)
 {
@@ -174,16 +233,6 @@ printx(char *buf, size_t len)
         else if (!((i+1)%4)) printf("   ");
     }
     printf("\n");
-}
-
-int
-query_read_rr(char *buf, char *bufend, char **owner_end, uint16_t **rdatalen, char **rdata)
-{
-    /*printx(buf, 40);*/
-    if (query_find_owner_uncompressed(buf, owner_end, bufend)) return 1;
-    *rdatalen = (uint16_t *)(*owner_end + 8);
-    *rdata    = (*owner_end + 10);
-    return 0;
 }
 
 /*Caller is supposed to sanity checks before calling*/

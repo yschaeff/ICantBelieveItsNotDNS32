@@ -23,14 +23,15 @@ so nothing is stopping me from using stupid tricks. Yay!
 - No non-volatile storage required
 - Multi threaded query processing
 - Up to 2100 Queries per second over WiFi
+- UDP _and_ TCP query handling
 
 ### Futures ###
 
 - Notify processing, maybe add TSIG?
-- NOAUTH
-- IPv6
+- IPv6 (This is a limitation in the LWIP framework, the version used by esp-idf
+  doesn't support dual stack)
 - EDNS0
-- DNSSEC
+- Followed by DNSSEC
 
 ## Installation ##
 
